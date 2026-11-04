@@ -1,3 +1,13 @@
+## 2026-11-04 Sites frontend migration
+
+- Public Sites project `appgprj_6aebb054ec9081918311eca3ede0063e`, version 1, published successfully at https://saladfinder.defcron.chatgpt.site.
+- Artifact commit `9412b7d232f58dce51560aab4702bf5daa4cc6de` is also published to GitHub branch `frontend-deploy`. Sites uses its own managed source repository in addition to this mirror; GitHub pushes alone do not deploy Sites.
+- Production gateway version `861d689f-f3d1-41b9-ac01-b248bb770b82` serves Sites pages/assets at https://saladfinder.com. APIs remain on the existing Worker/D1. DNS and www canonical redirects are unchanged.
+- Deploy-first validation, as requested: initial `/index.html` request encountered Sites' 307 redirect; gateway corrected to request `/` and redeployed. Live root/sign-in return 200 with `X-SaladFinder-Frontend: sites`; API health returns 200; missing static assets return 404.
+- `npm run check`, `npm run coverage` (166 tests, 93.22% lines), and `npm run test:e2e` (18 tests) passed. Focused gateway regression rerun passed after the root-path correction.
+- Browser plugin not available; regular Playwright checked the canonical live host at 1440px and 390px: meaningful content, all brand images decoded, no horizontal overflow, sign-in and unknown-route recovery, and no JavaScript page errors. The pre-existing blocked Cloudflare analytics beacon remains separate from app functionality. Direct Sites-origin visits redirect to the canonical domain.
+- Production remains preview. Operator reports Stripe activation complete; live Worker secret-name inspection shows Stripe credentials/webhook signing secrets are not installed yet. No live payment, transfer or payout was made.
+
 # Brand integration — 2026-11-04
 
 Production Worker version: `813ef48d-b0a7-4a48-9f8f-96b3aea9aa4f`.

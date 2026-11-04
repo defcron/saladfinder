@@ -33,6 +33,7 @@
   },
   "vars": {
     "APP_ENV": "production",
+    "FRONTEND_ORIGIN": "https://saladfinder.defcron.chatgpt.site",
     "APP_URL": "https://saladfinder.com",
     "LAUNCH_MODE": "preview",
     "LISTINGS_ENABLED": "true",

@@ -9,6 +9,7 @@ import { isLocal, listingsEnabled, originGuard } from "./middleware";
 import { payments } from "./payments";
 import { isSignInReady } from "./email";
 import { canonicalRedirect } from "./routing";
+import { frontend } from "./frontend";
 import type { AppBindings, AppEnv } from "./types";
 
 export const app = new Hono<AppEnv>();
@@ -116,14 +117,14 @@ export default {
     const { pathname } = new URL(request.url);
     if (pathname === "/api" || pathname.startsWith("/api/"))
       return app.fetch(request, env, ctx);
-    // With run_worker_first enabled, pages/assets still use Cloudflare's
-    // configured SPA fallback and security/cache headers through this binding.
+    // Production serves the Sites frontend through the canonical same-origin gateway.
+    // Local/staging continue to use their isolated ASSETS binding.
     if (!["GET", "HEAD"].includes(request.method))
       return new Response("Method not allowed.", {
         status: 405,
         headers: { Allow: "GET, HEAD", "Cache-Control": "no-store" },
       });
-    return env.ASSETS.fetch(request);
+    return frontend(request, env);
   },
   async scheduled(_controller: ScheduledController, env: Env): Promise<void> {
     // Expiring credentials and throttle records never need long-term retention.

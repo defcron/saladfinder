@@ -2,7 +2,7 @@
 
 SaladFinder is an Ontario/CAD local-services marketplace. The listings pilot uses `LISTINGS_ENABLED=true` with `LAUNCH_MODE=preview`: verified users can post, apply, withdraw applications, cancel their open listings and report issues. Hiring, starting work, private work messages, milestone progression, Checkout and payouts remain blocked. Pilot listings must not invite people to start work before bookings open.
 
-Production paid bookings remain blocked by incomplete Stripe owner verification and outstanding Connect acceptance. Deploying code or connecting a Stripe account does not complete those requirements. Keep `LAUNCH_MODE=preview` until the paid-launch checklist below is complete. [VERIFICATION.md](VERIFICATION.md) distinguishes the checked-in release, actual deployment and provider evidence.
+The operator reported Stripe verification and payment activation complete on 2026-11-04. Production still requires installation of the live API credential and both webhook signing secrets, plus provider acceptance. The production secret-name inventory at the Sites migration contained only `ADMIN_EMAILS` and `TURNSTILE_SECRET_KEY`. Keep `LAUNCH_MODE=preview` until the paid-launch checklist below is complete. [VERIFICATION.md](VERIFICATION.md) distinguishes the checked-in release, actual deployment and provider evidence.
 
 ## 1. Establish the business
 
@@ -43,7 +43,7 @@ npm run db:remote
 npx wrangler deploy
 ```
 
-The configuration binds one D1 database and serves the Vite output from Workers Static Assets. Static paths have browser security headers; API paths have their own no-store/security headers. Turnstile permits the SaladFinder domain and the original Workers hostname. The Pages gateway and HTTPS for `www.saladfinder.com` are active, and apex HTTPS forwarding preserves the requested path and query. The canonical URL and email release checkpoint is recorded in [domain connection](DOMAIN.md). Before paid launch, verify `APP_URL`, Turnstile, Stripe return/webhook URLs and same-origin flows on the canonical hostname together.
+The configuration binds one D1 database. Production serves the frontend from ChatGPT Sites through the same-origin Cloudflare gateway; local/staging use Workers Static Assets. See [Sites deployment](SITES-DEPLOYMENT.md) for the separate frontend branch, publishing procedure and rollback. Static paths have browser security headers; API paths have their own no-store/security headers. The canonical root is `https://saladfinder.com`, with `www` redirecting to it while preserving path and query. Before paid launch, verify `APP_URL`, Turnstile, Stripe return/webhook URLs and same-origin flows on the canonical hostname together.
 
 GitHub's manual Deploy workflow expects a scoped `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` in the production environment. Never upload a personal Wrangler OAuth session as a CI secret. Restrict production deployment access and enable GitHub account 2FA. The ordinary CI workflow needs no cloud or payment secrets.
 
