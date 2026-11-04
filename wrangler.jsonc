@@ -1,0 +1,88 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "daywork",
+  "main": "src/server/index.ts",
+  "compatibility_date": "2026-11-03",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": true,
+  "preview_urls": false,
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*"],
+  },
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 0.1,
+    "redact_query_string": true,
+    "logs": {
+      "enabled": true,
+      "invocation_logs": false,
+    },
+  },
+  "limits": {
+    "cpu_ms": 100,
+  },
+  "triggers": {
+    "crons": ["17 4 * * *"],
+  },
+  "vars": {
+    "APP_ENV": "production",
+    "APP_URL": "https://daywork.defcronyke.workers.dev",
+    "LAUNCH_MODE": "preview",
+    "EMAIL_FROM": "",
+    "SUPPORT_EMAIL": "",
+    "ADMIN_EMAILS": "",
+    "TURNSTILE_SITE_KEY": "0x4AAAAAAFy7jBRAq28vKkD1",
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "daywork-production",
+      "database_id": "2de28ed5-cf1c-4a42-84ad-e7b0d869238c",
+      "migrations_dir": "migrations",
+    },
+  ],
+  "env": {
+    "local": {
+      "name": "daywork-local",
+      "vars": {
+        "APP_ENV": "local",
+        "APP_URL": "http://127.0.0.1:8787",
+        "LAUNCH_MODE": "live",
+        "EMAIL_FROM": "",
+        "SUPPORT_EMAIL": "",
+        "ADMIN_EMAILS": "operator@example.test",
+        "TURNSTILE_SITE_KEY": "",
+      },
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "daywork-local",
+          "database_id": "00000000-0000-0000-0000-000000000001",
+          "migrations_dir": "migrations",
+        },
+      ],
+    },
+    "staging": {
+      "name": "daywork-staging",
+      "vars": {
+        "APP_ENV": "staging",
+        "APP_URL": "https://daywork-staging.defcronyke.workers.dev",
+        "LAUNCH_MODE": "preview",
+        "EMAIL_FROM": "",
+        "SUPPORT_EMAIL": "",
+        "ADMIN_EMAILS": "",
+        "TURNSTILE_SITE_KEY": "",
+      },
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "daywork-staging",
+          "migrations_dir": "migrations",
+        },
+      ],
+    },
+  },
+}

@@ -1,0 +1,952 @@
+import {
+  afterAll,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from "vitest";
+import Stripe from "stripe";
+import { Hono } from "hono";
+import { HTTPException } from "hono/http-exception";
+import type { AppEnv } from "../src/server/types";
+import type { User } from "../src/shared/types";
+import {
+  createPaymentsRouter,
+  platformFee,
+  suspendJobPayments,
+} from "../src/server/payments";
+import { originGuard } from "../src/server/middleware";
+import { makeTestEnv } from "./helpers";
+
+const provider = new Stripe("sk_test_payment_fixture");
+const worker: User = {
+  id: "worker",
+  email: "worker@example.test",
+  name: "Worker",
+  role: "worker",
+  bio: "",
+  city: "Toronto",
+  skills: [],
+  created_at: "",
+  stripe_account_id: "acct_worker",
+  suspended_at: null,
+};
+const poster: User = {
+  ...worker,
+  id: "poster",
+  email: "poster@example.test",
+  name: "Client",
+  role: "poster",
+  stripe_account_id: null,
+};
+const admin: User = {
+  ...poster,
+  id: "admin",
+  email: "admin@example.test",
+  name: "Admin",
+};
+const people: Record<string, User> = { worker, poster, admin };
+
+function fakeStripe() {
+  const sessions = new Map<string, Stripe.Checkout.Session>();
+  const intents = new Map<string, Stripe.PaymentIntent>();
+  const payouts = new Map<string, Stripe.Payout>();
+  const refunds = new Map<string, Stripe.Refund>();
+  const accounts = new Map<string, { id: string }>();
+  const stripe = {
+    accounts: {
+      retrieve: vi.fn(async () => ({
+        id: "acct_worker",
+        country: "CA",
+        capabilities: { transfers: "active" },
+        payouts_enabled: true,
+        charges_enabled: false,
+        details_submitted: true,
+      })),
+      createLoginLink: vi.fn(async () => ({
+        url: "https://connect.stripe.com/fixture-dashboard",
+      })),
+    },
+    v2: {
+      core: {
+        accounts: {
+          create: vi.fn(
+            async (_params: unknown, options: { idempotencyKey: string }) => {
+              if (!accounts.has(options.idempotencyKey))
+                accounts.set(options.idempotencyKey, { id: "acct_worker" });
+              return accounts.get(options.idempotencyKey)!;
+            },
+          ),
+        },
+        accountLinks: {
+          create: vi.fn(async () => ({
+            url: "https://connect.stripe.com/fixture-onboarding",
+          })),
+        },
+      },
+    },
+    balance: {
+      retrieve: vi.fn(async () => ({
+        available: [{ currency: "cad", amount: 100000 }],
+        pending: [{ currency: "cad", amount: 5000 }],
+        instant_available: [
+          {
+            currency: "cad",
+            amount: 100000,
+            net_available: [{ destination: "card_eligible", amount: 100000 }],
+          },
+        ],
+        livemode: false,
+      })),
+    },
+    checkout: {
+      sessions: {
+        create: vi.fn(
+          async (
+            params: Stripe.Checkout.SessionCreateParams,
+            options: { idempotencyKey: string },
+          ) => {
+            const existing = [...sessions.values()].find(
+              (s) => s.client_reference_id === options.idempotencyKey,
+            );
+            if (existing) return existing;
+            const attempt = params.metadata!.payment_attempt_id as string;
+            const intent = {
+              id: `pi_${attempt}`,
+              object: "payment_intent",
+              amount: 11300,
+              amount_received: 11300,
+              currency: "cad",
+              livemode: false,
+              status: "succeeded",
+              application_fee_amount:
+                params.payment_intent_data!.application_fee_amount,
+              transfer_data: params.payment_intent_data!.transfer_data,
+              metadata: params.payment_intent_data!.metadata,
+              latest_charge: {
+                id: `ch_${attempt}`,
+                amount_refunded: 0,
+                disputed: false,
+              },
+            } as unknown as Stripe.PaymentIntent;
+            intents.set(intent.id, intent);
+            const session = {
+              id: `cs_${attempt}`,
+              object: "checkout.session",
+              client_reference_id: options.idempotencyKey,
+              status: "open",
+              payment_status: "paid",
+              mode: "payment",
+              amount_total: 11300,
+              currency: "cad",
+              livemode: false,
+              payment_intent: intent.id,
+              metadata: params.metadata,
+              url: `https://checkout.stripe.com/c/pay/${attempt}`,
+            } as unknown as Stripe.Checkout.Session;
+            sessions.set(session.id, session);
+            return session;
+          },
+        ),
+        retrieve: vi.fn(async (id: string) => sessions.get(id)!),
+        expire: vi.fn(async (id: string) => {
+          const session = sessions.get(id)!;
+          session.status = "expired";
+          return session;
+        }),
+      },
+    },
+    paymentIntents: { retrieve: vi.fn(async (id: string) => intents.get(id)!) },
+    payouts: {
+      create: vi.fn(
+        async (
+          params: Stripe.PayoutCreateParams,
+          options: { idempotencyKey: string },
+        ) => {
+          const id = `po_${options.idempotencyKey}`;
+          if (!payouts.has(id))
+            payouts.set(id, {
+              id,
+              amount: params.amount,
+              currency: "cad",
+              method: params.method,
+              status: "pending",
+              arrival_date: Math.floor(Date.now() / 1000) + 86400,
+              created: Math.floor(Date.now() / 1000),
+              metadata: params.metadata,
+            } as Stripe.Payout);
+          return payouts.get(id)!;
+        },
+      ),
+      retrieve: vi.fn(async (id: string) => payouts.get(id)!),
+      list: vi.fn(async () => ({ data: [...payouts.values()] })),
+    },
+    refunds: {
+      create: vi.fn(
+        async (
+          params: Stripe.RefundCreateParams,
+          options: { idempotencyKey: string },
+        ) => {
+          const id = `re_${options.idempotencyKey}`;
+          if (!refunds.has(id))
+            refunds.set(id, {
+              id,
+              status: "succeeded",
+              amount: 11300,
+              currency: "cad",
+              payment_intent: params.payment_intent,
+              metadata: params.metadata,
+            } as Stripe.Refund);
+          return refunds.get(id)!;
+        },
+      ),
+      retrieve: vi.fn(async (id: string) => refunds.get(id)!),
+    },
+    webhooks: provider.webhooks,
+  };
+  return {
+    stripe,
+    sessions,
+    intents,
+    payouts,
+    refunds,
+    accounts,
+    client: stripe as unknown as Stripe,
+  };
+}
+
+describe("payment ownership, ledger and Stripe event reconciliation", () => {
+  let harness: Awaited<ReturnType<typeof makeTestEnv>>;
+  let env: Env;
+  let fixture: ReturnType<typeof fakeStripe>;
+  let app: Hono<AppEnv>;
+  beforeAll(async () => {
+    harness = await makeTestEnv();
+    env = harness.env;
+  });
+  afterAll(async () => {
+    await harness.dispose();
+  });
+  beforeEach(async () => {
+    Object.assign(env, {
+      APP_ENV: "local",
+      APP_URL: "http://localhost",
+      LAUNCH_MODE: "live",
+      STRIPE_SECRET_KEY: "sk_test_payment_fixture",
+      STRIPE_WEBHOOK_SECRET: "whsec_platform_fixture",
+      STRIPE_CONNECT_WEBHOOK_SECRET: "whsec_connect_fixture",
+      ADMIN_EMAILS: admin.email,
+    });
+    await env.DB.batch(
+      [
+        "stripe_events",
+        "payment_incidents",
+        "refund_intents",
+        "payout_intents",
+        "payment_attempts",
+        "connect_intents",
+        "milestones",
+        "jobs",
+        "users",
+        "rate_limits",
+      ].map((table) => env.DB.prepare(`DELETE FROM ${table}`)),
+    );
+    await env.DB.batch(
+      Object.values(people).map((u) =>
+        env.DB.prepare(
+          "INSERT INTO users (id,email,name,role,stripe_account_id,consent_at) VALUES (?,?,?,?,?,?)",
+        ).bind(
+          u.id,
+          u.email,
+          u.name,
+          u.role,
+          u.stripe_account_id,
+          new Date().toISOString(),
+        ),
+      ),
+    );
+    await env.DB.prepare(
+      "INSERT INTO jobs (id,poster_id,worker_id,title,description,category,city,start_date,estimated_hours,budget_cents,status,payment_schedule) VALUES ('job','poster','worker','Clean kitchen','Clean kitchen thoroughly','Cleaning','Toronto','2026-12-01',3,10000,'in_progress','completion')",
+    ).run();
+    await env.DB.prepare(
+      "INSERT INTO milestones (id,job_id,title,amount_cents,position,status) VALUES ('milestone','job','Completed clean',10000,1,'approved')",
+    ).run();
+    fixture = fakeStripe();
+    app = new Hono<AppEnv>();
+    app.use("*", originGuard);
+    app.use("*", async (c, next) => {
+      const id = c.req.header("X-Test-User");
+      c.set("user", id ? (people[id] ?? null) : null);
+      await next();
+    });
+    app.route(
+      "/api",
+      createPaymentsRouter(() => fixture.client),
+    );
+    app.onError((error, c) =>
+      error instanceof HTTPException
+        ? c.json({ error: error.message }, error.status)
+        : c.json({ error: error.message }, 500),
+    );
+  });
+  const request = (
+    path: string,
+    user = "poster",
+    body: unknown = {},
+    method = "POST",
+  ) =>
+    app.request(
+      `http://localhost/api${path}`,
+      {
+        method,
+        headers: {
+          "Content-Type": "application/json",
+          Origin: "http://localhost",
+          "X-Test-User": user,
+        },
+        ...(method === "GET" ? {} : { body: JSON.stringify(body) }),
+      },
+      env,
+    );
+  const row = <T = { status: string }>(query: string) =>
+    env.DB.prepare(query).first<T>();
+  async function checkout() {
+    const response = await request("/milestones/milestone/checkout");
+    expect(response.status, JSON.stringify(await response.clone().json())).toBe(
+      200,
+    );
+    return [...fixture.sessions.values()][0]!;
+  }
+  async function notify(
+    type: string,
+    object: unknown,
+    options: {
+      id?: string;
+      account?: string;
+      live?: boolean;
+      connected?: boolean;
+      invalidSignature?: boolean;
+    } = {},
+  ) {
+    const payload = JSON.stringify({
+      id: options.id ?? crypto.randomUUID(),
+      object: "event",
+      type,
+      created: Math.floor(Date.now() / 1000),
+      livemode: options.live ?? false,
+      ...(options.account ? { account: options.account } : {}),
+      data: { object },
+    });
+    const signature = provider.webhooks.generateTestHeaderString({
+      payload,
+      secret: options.invalidSignature
+        ? "wrong"
+        : options.connected
+          ? env.STRIPE_CONNECT_WEBHOOK_SECRET!
+          : env.STRIPE_WEBHOOK_SECRET!,
+    });
+    return app.request(
+      `http://localhost/api/webhooks/stripe${options.connected ? "-connect" : ""}`,
+      {
+        method: "POST",
+        body: payload,
+        headers: { "Stripe-Signature": signature },
+      },
+      env,
+    );
+  }
+
+  it("calculates the posted fee in integer cents including its minimum", () => {
+    expect(platformFee(10000)).toBe(1300);
+    expect(platformFee(100)).toBe(300);
+    expect(platformFee(2501)).toBe(400);
+  });
+
+  it("fails closed without a session, in preview, or with test keys in production", async () => {
+    expect((await request("/milestones/milestone/checkout", "")).status).toBe(
+      401,
+    );
+    env.LAUNCH_MODE = "preview";
+    expect((await request("/milestones/milestone/checkout")).status).toBe(503);
+    env.LAUNCH_MODE = "live";
+    env.APP_ENV = "production";
+    expect((await request("/milestones/milestone/checkout")).status).toBe(503);
+    expect(fixture.stripe.checkout.sessions.create).not.toHaveBeenCalled();
+  });
+
+  it("blocks a foreign origin and prevents workers paying their own assigned milestone", async () => {
+    expect(
+      (
+        await app.request(
+          "http://localhost/api/milestones/milestone/checkout",
+          {
+            method: "POST",
+            headers: {
+              Origin: "https://attacker.example",
+              "Content-Type": "application/json",
+              "X-Test-User": "poster",
+            },
+            body: "{}",
+          },
+          env,
+        )
+      ).status,
+    ).toBe(403);
+    expect(
+      (await request("/milestones/milestone/checkout", "worker")).status,
+    ).toBe(403);
+    expect(fixture.stripe.checkout.sessions.create).not.toHaveBeenCalled();
+  });
+
+  it("requires approval and a payout-ready Canadian worker account", async () => {
+    await env.DB.prepare("UPDATE milestones SET status = 'submitted'").run();
+    expect((await request("/milestones/milestone/checkout")).status).toBe(409);
+    await env.DB.prepare("UPDATE milestones SET status = 'approved'").run();
+    fixture.stripe.accounts.retrieve.mockResolvedValue({
+      id: "acct_worker",
+      country: "CA",
+      capabilities: { transfers: "active" },
+      payouts_enabled: false,
+      charges_enabled: false,
+      details_submitted: true,
+    });
+    expect((await request("/milestones/milestone/checkout")).status).toBe(409);
+  });
+
+  it("persists a single attempt under concurrent checkout requests and charges the server-computed amount", async () => {
+    const responses = await Promise.all([
+      request("/milestones/milestone/checkout"),
+      request("/milestones/milestone/checkout"),
+    ]);
+    expect(responses.map((r) => r.status)).toEqual([200, 200]);
+    expect(
+      (await row<{ count: number }>(
+        "SELECT COUNT(*) AS count FROM payment_attempts",
+      ))!.count,
+    ).toBe(1);
+    expect(fixture.sessions.size).toBe(1);
+    expect(
+      fixture.stripe.checkout.sessions.create.mock.calls[0]![0]
+        .payment_intent_data,
+    ).toMatchObject({
+      application_fee_amount: 1300,
+      transfer_data: { destination: "acct_worker" },
+    });
+    expect(
+      (await row("SELECT status FROM milestones WHERE id = 'milestone'"))!
+        .status,
+    ).toBe("checkout_pending");
+  });
+
+  it("marks the job complete only after a signed verified payment and tolerates duplicate delivery", async () => {
+    const session = await checkout();
+    const response = await notify("checkout.session.completed", session, {
+      id: "evt_paid",
+    });
+    expect(response.status, JSON.stringify(await response.clone().json())).toBe(
+      200,
+    );
+    expect(
+      (await row("SELECT status FROM milestones WHERE id = 'milestone'"))!
+        .status,
+    ).toBe("paid");
+    expect(
+      (await row("SELECT status FROM jobs WHERE id = 'job'"))!.status,
+    ).toBe("completed");
+    const duplicate = await notify("checkout.session.completed", session, {
+      id: "evt_paid",
+    });
+    expect(await duplicate.json()).toMatchObject({
+      received: true,
+      duplicate: true,
+    });
+    expect(
+      (await row<{ count: number }>(
+        "SELECT COUNT(*) AS count FROM stripe_events",
+      ))!.count,
+    ).toBe(1);
+  });
+
+  it("rejects signature, mode and account-scope violations", async () => {
+    const session = await checkout();
+    expect(
+      (
+        await notify("checkout.session.completed", session, {
+          invalidSignature: true,
+        })
+      ).status,
+    ).toBe(400);
+    expect(
+      (await notify("checkout.session.completed", session, { live: true }))
+        .status,
+    ).toBe(400);
+    expect(
+      (
+        await notify("checkout.session.completed", session, {
+          account: "acct_foreign",
+        })
+      ).status,
+    ).toBe(400);
+    expect(
+      (await row("SELECT status FROM milestones WHERE id = 'milestone'"))!
+        .status,
+    ).toBe("checkout_pending");
+  });
+
+  it.each(["amount", "currency", "destination", "fee"])(
+    "rejects a %s mismatch against the durable checkout intent",
+    async (field) => {
+      const session = await checkout();
+      const intent = fixture.intents.get(session.payment_intent as string)!;
+      if (field === "amount") intent.amount_received = 1;
+      if (field === "currency") intent.currency = "usd";
+      if (field === "destination")
+        intent.transfer_data!.destination = "acct_attacker";
+      if (field === "fee") intent.application_fee_amount = 1;
+      expect((await notify("checkout.session.completed", session)).status).toBe(
+        400,
+      );
+      expect(
+        (await row("SELECT status FROM milestones WHERE id = 'milestone'"))!
+          .status,
+      ).toBe("checkout_pending");
+    },
+  );
+
+  it("handles a full refund delivered before Checkout success without resurrecting payment", async () => {
+    const session = await checkout();
+    const intent = fixture.intents.get(session.payment_intent as string)!;
+    const charge = {
+      id: "ch_refunded",
+      payment_intent: intent.id,
+      amount_refunded: 11300,
+      disputed: false,
+    } as Stripe.Charge;
+    intent.latest_charge = charge;
+    expect((await notify("charge.refunded", charge)).status).toBe(200);
+    expect((await notify("checkout.session.completed", session)).status).toBe(
+      200,
+    );
+    expect((await row("SELECT status FROM payment_attempts"))!.status).toBe(
+      "refunded",
+    );
+    expect((await row("SELECT status FROM milestones"))!.status).toBe(
+      "refunded",
+    );
+    expect((await row("SELECT status FROM jobs"))!.status).toBe("disputed");
+  });
+
+  it("freezes a disputed payment even when the dispute arrives before payment success", async () => {
+    const session = await checkout();
+    const intent = fixture.intents.get(session.payment_intent as string)!;
+    (intent.latest_charge as Stripe.Charge).disputed = true;
+    expect(
+      (
+        await notify("charge.dispute.created", {
+          id: "dp_one",
+          payment_intent: intent.id,
+          status: "needs_response",
+        })
+      ).status,
+    ).toBe(200);
+    expect((await notify("checkout.session.completed", session)).status).toBe(
+      200,
+    );
+    expect((await row("SELECT status FROM payment_attempts"))!.status).toBe(
+      "disputed",
+    );
+    expect((await row("SELECT status FROM jobs"))!.status).toBe("disputed");
+    expect(
+      (
+        await request("/payments/payout", "worker", {
+          method: "standard",
+          amount_cents: 1000,
+          requestId: crypto.randomUUID(),
+        })
+      ).status,
+    ).toBe(409);
+  });
+
+  it("expires a held checkout and records a concurrent completed charge for review", async () => {
+    const session = await checkout();
+    await env.DB.prepare("UPDATE jobs SET status = 'disputed'").run();
+    await suspendJobPayments(env, "job", () => fixture.client);
+    expect(fixture.stripe.checkout.sessions.expire).toHaveBeenCalledWith(
+      session.id,
+      {},
+      expect.anything(),
+    );
+    expect((await request("/milestones/milestone/checkout")).status).toBe(409);
+    expect((await notify("checkout.session.completed", session)).status).toBe(
+      200,
+    );
+    expect(
+      (await row<{ count: number }>(
+        "SELECT COUNT(*) AS count FROM payment_incidents",
+      ))!.count,
+    ).toBe(1);
+    expect((await row("SELECT status FROM jobs"))!.status).toBe("disputed");
+  });
+
+  it("creates a replacement only after the existing Checkout session is confirmed expired", async () => {
+    const session = await checkout();
+    session.status = "complete";
+    expect((await request("/milestones/milestone/checkout")).status).toBe(409);
+    session.status = "expired";
+    expect((await request("/milestones/milestone/checkout")).status).toBe(200);
+    expect(fixture.sessions.size).toBe(2);
+  });
+
+  it("blocks ambiguous retries outside Stripe’s idempotency retention window", async () => {
+    fixture.stripe.checkout.sessions.create.mockRejectedValueOnce(
+      new Error("ambiguous network timeout"),
+    );
+    expect((await request("/milestones/milestone/checkout")).status).toBe(500);
+    await env.DB.prepare(
+      "UPDATE payment_attempts SET created_at = '2026-01-01T00:00:00Z'",
+    ).run();
+    expect((await request("/milestones/milestone/checkout")).status).toBe(409);
+    expect(fixture.stripe.checkout.sessions.create).toHaveBeenCalledTimes(1);
+  });
+
+  it("retries the exact saved Checkout payload after a timeout even if the app URL changes", async () => {
+    fixture.stripe.checkout.sessions.create.mockRejectedValueOnce(
+      new Error("network timeout"),
+    );
+    expect((await request("/milestones/milestone/checkout")).status).toBe(500);
+    const firstPayload =
+      fixture.stripe.checkout.sessions.create.mock.calls[0]![0];
+    env.APP_URL = "https://new.example.test";
+    expect((await request("/milestones/milestone/checkout")).status).toBe(200);
+    expect(fixture.stripe.checkout.sessions.create.mock.calls[1]![0]).toEqual(
+      firstPayload,
+    );
+    expect(fixture.stripe.checkout.sessions.create.mock.calls[1]![1]).toEqual(
+      fixture.stripe.checkout.sessions.create.mock.calls[0]![1],
+    );
+  });
+
+  it("does not let a delayed expiration event reset the replacement checkout", async () => {
+    const first = await checkout();
+    first.status = "expired";
+    expect((await request("/milestones/milestone/checkout")).status).toBe(200);
+    expect((await notify("checkout.session.expired", first)).status).toBe(200);
+    expect((await row("SELECT status FROM milestones"))!.status).toBe(
+      "checkout_pending",
+    );
+  });
+
+  it("holds failed asynchronous payments for reconciliation without creating another charge", async () => {
+    const session = await checkout();
+    expect(
+      (await notify("checkout.session.async_payment_failed", session)).status,
+    ).toBe(200);
+    expect((await request("/milestones/milestone/checkout")).status).toBe(409);
+    expect((await row("SELECT status FROM payment_attempts"))!.status).toBe(
+      "failed",
+    );
+    expect(fixture.sessions.size).toBe(1);
+  });
+
+  it("checks payout balance and instant destination eligibility before making a payout", async () => {
+    expect(
+      (
+        await request("/payments/payout", "worker", {
+          method: "standard",
+          amount_cents: 100001,
+          requestId: crypto.randomUUID(),
+        })
+      ).status,
+    ).toBe(409);
+    fixture.stripe.balance.retrieve.mockResolvedValue({
+      available: [{ currency: "cad", amount: 100000 }],
+      pending: [],
+      instant_available: [],
+      livemode: false,
+    });
+    expect(
+      (
+        await request("/payments/payout", "worker", {
+          method: "instant",
+          amount_cents: 1000,
+          requestId: crypto.randomUUID(),
+        })
+      ).status,
+    ).toBe(409);
+    expect(fixture.stripe.payouts.create).not.toHaveBeenCalled();
+  });
+
+  it("pays an eligible instant destination once and rejects reuse with a different amount", async () => {
+    const input = {
+      method: "instant",
+      amount_cents: 1000,
+      requestId: crypto.randomUUID(),
+    };
+    expect((await request("/payments/payout", "worker", input)).status).toBe(
+      200,
+    );
+    expect((await request("/payments/payout", "worker", input)).status).toBe(
+      200,
+    );
+    expect(
+      (
+        await request("/payments/payout", "worker", {
+          ...input,
+          amount_cents: 2000,
+        })
+      ).status,
+    ).toBe(409);
+    expect(fixture.stripe.payouts.create).toHaveBeenCalledTimes(1);
+    expect(fixture.stripe.payouts.create.mock.calls[0]![0]).toMatchObject({
+      destination: "card_eligible",
+      amount: 1000,
+      currency: "cad",
+      method: "instant",
+    });
+  });
+
+  it("rejects concurrent reuse of a payout request identifier for different amounts", async () => {
+    const requestId = crypto.randomUUID();
+    const responses = await Promise.all([
+      request("/payments/payout", "worker", {
+        method: "standard",
+        amount_cents: 1000,
+        requestId,
+      }),
+      request("/payments/payout", "worker", {
+        method: "standard",
+        amount_cents: 2000,
+        requestId,
+      }),
+    ]);
+    expect(responses.map((x) => x.status).sort()).toEqual([200, 409]);
+    expect(fixture.payouts.size).toBe(1);
+  });
+
+  it("retains a durable payout request on ambiguity and refuses a second outstanding request", async () => {
+    fixture.stripe.payouts.create.mockRejectedValueOnce(
+      new Error("network timeout"),
+    );
+    const input = {
+      method: "standard",
+      amount_cents: 1000,
+      requestId: crypto.randomUUID(),
+    };
+    expect((await request("/payments/payout", "worker", input)).status).toBe(
+      500,
+    );
+    expect(
+      (
+        await request("/payments/payout", "worker", {
+          ...input,
+          requestId: crypto.randomUUID(),
+        })
+      ).status,
+    ).toBe(409);
+    expect((await request("/payments/payout", "worker", input)).status).toBe(
+      200,
+    );
+    expect(fixture.stripe.payouts.create.mock.calls[1]![1]).toEqual(
+      fixture.stripe.payouts.create.mock.calls[0]![1],
+    );
+    expect(fixture.payouts.size).toBe(1);
+  });
+
+  it("rejects invalid payout sizes, malformed identifiers and requests without an account", async () => {
+    expect(
+      (
+        await request("/payments/payout", "worker", {
+          method: "instant",
+          amount_cents: 50,
+          requestId: crypto.randomUUID(),
+        })
+      ).status,
+    ).toBe(400);
+    expect(
+      (
+        await request("/payments/payout", "worker", {
+          method: "standard",
+          amount_cents: 500,
+          requestId: "not-uuid",
+        })
+      ).status,
+    ).toBe(400);
+    expect(
+      (
+        await request("/payments/payout", "poster", {
+          method: "standard",
+          amount_cents: 1000,
+          requestId: crypto.randomUUID(),
+        })
+      ).status,
+    ).toBe(409);
+  });
+
+  it("reconciles an out-of-order payout notification against current Stripe state", async () => {
+    await request("/payments/payout", "worker", {
+      method: "standard",
+      amount_cents: 1000,
+      requestId: crypto.randomUUID(),
+    });
+    const payout = [...fixture.payouts.values()][0]!;
+    payout.status = "paid";
+    expect(
+      (
+        await notify(
+          "payout.created",
+          { ...payout, status: "pending" },
+          { account: "acct_worker", connected: true },
+        )
+      ).status,
+    ).toBe(200);
+    expect((await row("SELECT status FROM payout_intents"))!.status).toBe(
+      "paid",
+    );
+  });
+
+  it("allows only admins to refund and reverses both the transfer and platform fee", async () => {
+    const session = await checkout();
+    await notify("checkout.session.completed", session);
+    expect(
+      (
+        await request("/admin/milestones/milestone/refund", "poster", {
+          reason: "Agreed cancellation",
+        })
+      ).status,
+    ).toBe(403);
+    expect(
+      (
+        await request("/admin/milestones/milestone/refund", "admin", {
+          reason: "Agreed cancellation",
+        })
+      ).status,
+    ).toBe(200);
+    expect(
+      (
+        await request("/admin/milestones/milestone/refund", "admin", {
+          reason: "Agreed cancellation",
+        })
+      ).status,
+    ).toBe(200);
+    expect(fixture.stripe.refunds.create).toHaveBeenCalledTimes(1);
+    expect(fixture.stripe.refunds.create.mock.calls[0]![0]).toMatchObject({
+      reverse_transfer: true,
+      refund_application_fee: true,
+    });
+    const refund = [...fixture.refunds.values()][0]!;
+    expect(
+      (await notify("refund.updated", { ...refund, status: "pending" })).status,
+    ).toBe(200);
+    expect((await row("SELECT status FROM refund_intents"))!.status).toBe(
+      "succeeded",
+    );
+    expect((await row("SELECT status FROM milestones"))!.status).toBe(
+      "refunded",
+    );
+  });
+
+  it("onboards through Accounts v2 and never collects bank data in the application", async () => {
+    const original = worker.stripe_account_id;
+    worker.stripe_account_id = null;
+    await env.DB.prepare(
+      "UPDATE users SET stripe_account_id = NULL WHERE id = 'worker'",
+    ).run();
+    try {
+      expect((await request("/payments/onboard", "worker")).status).toBe(200);
+      expect((await request("/payments/onboard", "worker")).status).toBe(200);
+      expect(fixture.stripe.v2.core.accounts.create).toHaveBeenCalledTimes(1);
+      expect(
+        fixture.stripe.v2.core.accounts.create.mock.calls[0]![0],
+      ).toMatchObject({
+        dashboard: "express",
+        identity: { country: "ca" },
+        configuration: {
+          recipient: {
+            capabilities: {
+              stripe_balance: { stripe_transfers: { requested: true } },
+            },
+          },
+        },
+      });
+    } finally {
+      worker.stripe_account_id = original;
+    }
+  });
+
+  it("requires a worker role for onboarding and an account for dashboard access", async () => {
+    expect((await request("/payments/onboard", "poster")).status).toBe(403);
+    expect((await request("/payments/dashboard", "poster")).status).toBe(409);
+    expect((await request("/payments/dashboard", "worker")).status).toBe(200);
+  });
+
+  it("keeps staging test-only and shows unconfigured and onboarding-required states", async () => {
+    env.APP_ENV = "staging";
+    env.STRIPE_SECRET_KEY = "sk_live_fixture";
+    expect((await request("/payments/dashboard", "worker")).status).toBe(503);
+    env.APP_ENV = "local";
+    env.STRIPE_SECRET_KEY = "sk_test_fixture";
+    expect(
+      await (await request("/payments/status", "poster", {}, "GET")).json(),
+    ).toMatchObject({ accountReady: false, configured: true });
+    env.LAUNCH_MODE = "preview";
+    expect(
+      await (await request("/payments/status", "worker", {}, "GET")).json(),
+    ).toMatchObject({ accountReady: false, configured: false });
+  });
+
+  it("acknowledges irrelevant signed events without changing the financial ledger", async () => {
+    expect(
+      (await notify("customer.created", { id: "cus_unrelated" })).status,
+    ).toBe(200);
+    expect(
+      (await row<{ count: number }>(
+        "SELECT COUNT(*) AS count FROM payment_attempts",
+      ))!.count,
+    ).toBe(0);
+    expect((await row("SELECT status FROM milestones"))!.status).toBe(
+      "approved",
+    );
+  });
+
+  it("exposes reconciliation records only to a configured administrator", async () => {
+    expect((await request("/admin/payments", "poster", {}, "GET")).status).toBe(
+      403,
+    );
+    const session = await checkout();
+    await env.DB.prepare("UPDATE jobs SET status = 'disputed'").run();
+    await notify("checkout.session.completed", session);
+    const response = await request("/admin/payments", "admin", {}, "GET");
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      incidents: [expect.objectContaining({ job_id: "job" })],
+      unresolvedPayments: [
+        expect.objectContaining({
+          status: "disputed",
+          milestone_id: "milestone",
+        }),
+      ],
+      payouts: [],
+      refunds: [],
+    });
+  });
+
+  it("reports test mode and balances separately without claiming funds have arrived at a bank", async () => {
+    const response = await request("/payments/status", "worker", {}, "GET");
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      testMode: true,
+      accountReady: true,
+      chargesEnabled: false,
+      payoutsEnabled: true,
+      instantEligible: true,
+      balance: {
+        available_cents: 100000,
+        pending_cents: 5000,
+        instant_available_cents: 100000,
+      },
+      message: expect.stringContaining("no real money"),
+    });
+  });
+});

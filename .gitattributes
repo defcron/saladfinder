@@ -1,0 +1,2 @@
+# Preserve exact Wrangler-generated declarations; its vendor output contains trailing spaces.
+worker-configuration.d.ts linguist-generated=true -whitespace
