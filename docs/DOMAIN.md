@@ -1,3 +1,9 @@
+# Root-domain migration — 2026-11-04
+
+The canonical app is now https://saladfinder.com. Both root and www are routed directly to the application Worker. The proxied www CNAME targets saladfinder.com; GET/HEAD requests redirect to the root preserving path and query. The prior apex-to-www edge redirect is replaced. APP_URL uses the root, so new sign-in links and payment return URLs use it. Existing host-only www sessions require signing in on the root. Cloudflare manages HTTPS; mail, nameservers and kycaml remain unchanged. The Pages gateway remains a legacy entry point redirecting to the root.
+
+The historical setup below is superseded by this migration.
+
 # SaladFinder domain connection
 
 Status recorded on 2026-11-04: the operator explicitly authorized Cloudflare authoritative DNS for **saladfinder.com**, superseding the earlier Netfirms-nameserver requirement for this domain. Netfirms remains the registrar. The production app is in preview at **https://www.saladfinder.com**, with the canonical `APP_URL` now set to that origin. The apex also redirects to this canonical hostname. The [project checkpoint](PAUSED.md) separates deployed infrastructure from the deployed listing-pilot release and the remaining full account sign-in acceptance.

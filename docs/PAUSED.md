@@ -1,3 +1,5 @@
+> Domain update (2026-11-04): the canonical site is now **https://saladfinder.com**; earlier www-canonical references below are historical. See [DOMAIN.md](DOMAIN.md).
+
 # Project checkpoint — 2026-11-04
 
 The operator resumed SaladFinder and explicitly authorized Cloudflare authoritative DNS for **saladfinder.com**. The earlier pause and Netfirms-nameserver restriction are historical. The canonical website and email configuration are deployed; the current release enables a real listing-and-application pilot while keeping hiring, work and money movement disabled.

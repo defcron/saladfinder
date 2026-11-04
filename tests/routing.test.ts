@@ -20,7 +20,7 @@ describe("canonical public routing", () => {
     });
     fixture = await makeTestEnv({
       APP_ENV: "production",
-      APP_URL: "https://www.saladfinder.com",
+      APP_URL: "https://saladfinder.com",
       ASSETS: {
         fetch: assets,
         connect() {
@@ -39,6 +39,8 @@ describe("canonical public routing", () => {
     ["HEAD", "https://daywork.defcronyke.workers.dev"],
     ["GET", "https://saladfinder.pages.dev"],
     ["HEAD", "https://saladfinder.pages.dev"],
+    ["GET", "https://www.saladfinder.com"],
+    ["GET", "http://saladfinder.com"],
     ["GET", "http://www.saladfinder.com"],
     ["HEAD", "http://www.saladfinder.com"],
   ])(
@@ -52,7 +54,7 @@ describe("canonical public routing", () => {
       );
       expect(response.status).toBe(308);
       expect(response.headers.get("location")).toBe(
-        `https://www.saladfinder.com${path}`,
+        `https://saladfinder.com${path}`,
       );
       expect(response.headers.get("cache-control")).toBe("no-store");
       expect(response.headers.get("referrer-policy")).toBe("no-referrer");
@@ -78,7 +80,7 @@ describe("canonical public routing", () => {
     );
     expect(response.status).toBe(308);
     const target = new URL(response.headers.get("location")!);
-    expect(target.origin).toBe("https://www.saladfinder.com");
+    expect(target.origin).toBe("https://saladfinder.com");
     expect(target.pathname).toBe("//attacker.example/auth/verify");
     expect(target.search).toBe("?next=//attacker.example");
   });
@@ -87,7 +89,7 @@ describe("canonical public routing", () => {
     "passes canonical %s pages to ASSETS with their existing headers",
     async (method) => {
       const request = new Request(
-        "https://www.saladfinder.com/jobs/local?city=Toronto",
+        "https://saladfinder.com/jobs/local?city=Toronto",
         {
           method,
           headers: { "X-Forwarded-Host": "www.saladfinder.com" },
@@ -159,7 +161,7 @@ describe("canonical public routing", () => {
 
   it("routes canonical APIs through Hono rather than the SPA fallback", async () => {
     const health = await worker.fetch(
-      new Request("https://www.saladfinder.com/api/health"),
+      new Request("https://saladfinder.com/api/health"),
       fixture.env,
     );
     expect(health.status).toBe(200);
@@ -170,7 +172,7 @@ describe("canonical public routing", () => {
     expect(health.headers.get("cache-control")).toBe("no-store");
     for (const path of ["/api/missing", "/api"]) {
       const missing = await worker.fetch(
-        new Request(`https://www.saladfinder.com${path}`),
+        new Request(`https://saladfinder.com${path}`),
         fixture.env,
       );
       expect(missing.status).toBe(404);
@@ -182,7 +184,7 @@ describe("canonical public routing", () => {
     );
     expect(alias.status).toBe(308);
     expect(alias.headers.get("location")).toBe(
-      "https://www.saladfinder.com/api/health",
+      "https://saladfinder.com/api/health",
     );
     expect(assets).not.toHaveBeenCalled();
   });
@@ -207,10 +209,10 @@ describe("canonical public routing", () => {
       expect(response.headers.has("location")).toBe(false);
     }
     const canonical = await worker.fetch(
-      new Request("https://www.saladfinder.com/api/auth/request", {
+      new Request("https://saladfinder.com/api/auth/request", {
         method: "POST",
         headers: {
-          Origin: "https://www.saladfinder.com",
+          Origin: "https://saladfinder.com",
           "Content-Type": "application/json",
         },
         body: JSON.stringify({ email: "member@example.test", consent: true }),

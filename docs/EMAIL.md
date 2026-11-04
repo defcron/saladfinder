@@ -1,3 +1,5 @@
+> Domain update (2026-11-04): the canonical site is now **https://saladfinder.com**; earlier www-canonical references below are historical. See [DOMAIN.md](DOMAIN.md).
+
 # Transactional email and domain authentication
 
 Status recorded on 2026-11-04: **Cloudflare forwarding and sending have passed actual delivery checks. The app's restricted native email binding is deployed, and its actual sending function has passed provider and inbox acceptance. The complete production account sign-in and token-reuse cycle remains unverified.** The canonical app is in preview at `https://www.saladfinder.com`.

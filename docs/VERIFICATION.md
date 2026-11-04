@@ -1,3 +1,9 @@
+# Root-domain release — 2026-11-04
+
+Deployed Worker `2bc1c782-e35f-4dfa-9c65-930013959863` with root APP_URL and explicit root/www routes. Local and staging routes are explicitly empty to prevent production-route inheritance. Check/typecheck/build and all 153 unit tests passed; coverage passed (93% lines); all 18 browser tests passed after isolating local routes. Live root home, sign-in and pricing returned 200 over verified HTTPS. www returned 308 to root preserving paths/queries. Root-origin invalid auth input returned 400 and hostile origin returned 403. Full real-user sign-in was not repeated.
+
+Earlier checkpoints below are historical.
+
 # Verification record
 
 Updated on **2026-11-04**. This record distinguishes implementation, local regression tests, deployed preview checks and provider acceptance. Completed checks are recorded separately from pending release work. Historical snapshots below describe the state at their original checkpoints.

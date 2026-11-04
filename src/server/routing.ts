@@ -1,5 +1,6 @@
-const PUBLIC_ORIGIN = "https://www.saladfinder.com";
+const PUBLIC_ORIGIN = "https://saladfinder.com";
 const PUBLIC_HOSTS = new Set([
+  "saladfinder.com",
   "saladfinder.pages.dev",
   "www.saladfinder.com",
   "daywork.defcronyke.workers.dev",

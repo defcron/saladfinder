@@ -5,6 +5,10 @@
   "compatibility_date": "2026-11-03",
   "compatibility_flags": ["nodejs_compat"],
   "workers_dev": true,
+  "routes": [
+    { "pattern": "saladfinder.com/*", "zone_name": "saladfinder.com" },
+    { "pattern": "www.saladfinder.com/*", "zone_name": "saladfinder.com" },
+  ],
   "preview_urls": false,
   "assets": {
     "directory": "./dist",
@@ -29,7 +33,7 @@
   },
   "vars": {
     "APP_ENV": "production",
-    "APP_URL": "https://www.saladfinder.com",
+    "APP_URL": "https://saladfinder.com",
     "LAUNCH_MODE": "preview",
     "LISTINGS_ENABLED": "true",
     "EMAIL_PROVIDER": "cloudflare",
@@ -54,6 +58,7 @@
   "env": {
     "local": {
       "name": "daywork-local",
+      "routes": [],
       "vars": {
         "APP_ENV": "local",
         "APP_URL": "http://127.0.0.1:8787",
@@ -76,6 +81,7 @@
     },
     "staging": {
       "name": "daywork-staging",
+      "routes": [],
       "vars": {
         "APP_ENV": "staging",
         "APP_URL": "https://daywork-staging.defcronyke.workers.dev",

@@ -1,3 +1,5 @@
+> Current domain update (2026-11-04): the canonical site is **https://saladfinder.com**. The `www` CNAME points to the root and redirects there. Earlier www-canonical deployment notes below are historical. See [domain migration](docs/DOMAIN.md).
+
 # SaladFinder
 
 **Current checkpoint:** the canonical preview and email binding are deployed at `www.saladfinder.com`, and the apex now redirects there with verified HTTPS. The real posting-and-application pilot is deployed. Hiring, work and money movement remain disabled; native email-code delivery is verified, while the complete production account sign-in cycle remains unverified. See [the current checkpoint](docs/PAUSED.md).
@@ -6,7 +8,7 @@ An Ontario/CAD local-services marketplace built with React, Cloudflare Workers, 
 
 **Launch status: public preview.** Real-money transactions are disabled. Stripe owner verification, full Connect/payment-provider acceptance, complete production account sign-in acceptance and reviewed operator details/policies are required before paid launch. This repository is not evidence that those external steps are complete. See [launch runbook](docs/LAUNCH.md) and [verification record](docs/VERIFICATION.md).
 
-- App: https://www.saladfinder.com
+- App: https://saladfinder.com
 - Apex HTTP/HTTPS and previous Workers/Pages page URLs redirect to the canonical `www` hostname, preserving paths and queries ([domain status](docs/DOMAIN.md)).
 - Source: https://github.com/defcron/saladfinder
 - License: [MIT](LICENSE)
