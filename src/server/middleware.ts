@@ -14,7 +14,8 @@ export function isLocal(env: Env, requestUrl?: string): boolean {
 export function isAdmin(user: Pick<User, "email"> | null, env: Env): boolean {
   return (
     !!user &&
-    env.ADMIN_EMAILS.split(",")
+    (env.ADMIN_EMAILS || "")
+      .split(",")
       .map((x) => x.trim().toLowerCase())
       .filter(Boolean)
       .includes(user.email.toLowerCase())
@@ -43,6 +44,21 @@ export const requireLive = createMiddleware<AppEnv>(async (c, next) => {
         "SaladFinder is in preview. Join early access to hear when bookings open.",
     });
   }
+  await next();
+});
+export function listingsEnabled(env: Env, requestUrl?: string): boolean {
+  return (
+    env.LISTINGS_ENABLED === "true" ||
+    env.LAUNCH_MODE === "live" ||
+    isLocal(env, requestUrl)
+  );
+}
+export const requireListings = createMiddleware<AppEnv>(async (c, next) => {
+  if (!listingsEnabled(c.env, c.req.url))
+    throw new HTTPException(503, {
+      message:
+        "Posting and applications are not open yet. Join early access for updates.",
+    });
   await next();
 });
 export const originGuard = createMiddleware<AppEnv>(async (c, next) => {

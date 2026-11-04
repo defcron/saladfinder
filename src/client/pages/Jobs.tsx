@@ -15,6 +15,7 @@ import {
   Trash2,
   Send,
   ShieldCheck,
+  RefreshCw,
 } from "lucide-react";
 import {
   api,
@@ -42,20 +43,91 @@ import {
 } from "../components";
 
 type DraftMilestone = { key: string; title: string; amount: string };
+const jobDraftKey = "saladfinder-job-draft";
+type JobDraft = {
+  title: string;
+  description: string;
+  category: string;
+  city: string;
+  area: string;
+  date: string;
+  hours: string;
+  milestones: DraftMilestone[];
+};
+function readJobDraft(): JobDraft | null {
+  try {
+    const draft = JSON.parse(sessionStorage.getItem(jobDraftKey) || "null");
+    if (
+      !draft ||
+      typeof draft !== "object" ||
+      ![
+        "title",
+        "description",
+        "category",
+        "city",
+        "area",
+        "date",
+        "hours",
+      ].every((key) => typeof draft[key] === "string") ||
+      !Array.isArray(draft.milestones) ||
+      draft.milestones.length < 1 ||
+      draft.milestones.length > 5 ||
+      !draft.milestones.every(
+        (m: DraftMilestone) =>
+          m &&
+          typeof m.key === "string" &&
+          typeof m.title === "string" &&
+          typeof m.amount === "string",
+      )
+    )
+      return null;
+    return draft;
+  } catch {
+    return null;
+  }
+}
 export function PostJob() {
   const { user, config } = useApp();
   const navigate = useNavigate();
   const action = useAction();
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
-  const [category, setCategory] = useState<string>(categories[0]);
-  const [city, setCity] = useState("");
-  const [area, setArea] = useState("");
-  const [date, setDate] = useState("");
-  const [hours, setHours] = useState("");
-  const [milestones, setMilestones] = useState<DraftMilestone[]>([
-    { key: crypto.randomUUID(), title: "Job completed", amount: "" },
-  ]);
+  const [draft] = useState(readJobDraft);
+  const [draftSaved, setDraftSaved] = useState(false);
+  const [title, setTitle] = useState(draft?.title || "");
+  const [description, setDescription] = useState(draft?.description || "");
+  const [category, setCategory] = useState<string>(
+    categories.includes(draft?.category as (typeof categories)[number])
+      ? draft!.category
+      : categories[0],
+  );
+  const [city, setCity] = useState(draft?.city || "");
+  const [area, setArea] = useState(draft?.area || "");
+  const [date, setDate] = useState(draft?.date || "");
+  const [hours, setHours] = useState(draft?.hours || "");
+  const [milestones, setMilestones] = useState<DraftMilestone[]>(
+    draft?.milestones || [
+      { key: crypto.randomUUID(), title: "Job completed", amount: "" },
+    ],
+  );
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(
+        jobDraftKey,
+        JSON.stringify({
+          title,
+          description,
+          category,
+          city,
+          area,
+          date,
+          hours,
+          milestones,
+        }),
+      );
+      setDraftSaved(true);
+    } catch {
+      setDraftSaved(false);
+    }
+  }, [title, description, category, city, area, date, hours, milestones]);
   const amounts = milestones.map((m) =>
     Math.round(Number(m.amount || 0) * 100),
   );
@@ -64,13 +136,15 @@ export function PostJob() {
     (sum, amount) => sum + (amount > 0 ? feeFor(amount) : 0),
     0,
   );
-  const preview = config?.launchMode === "preview";
+  const listingsReady = config?.listingsReady ?? config?.launchMode === "live";
+  const preview = !listingsReady;
   const update = (key: string, field: "title" | "amount", value: string) =>
     setMilestones((rows) =>
       rows.map((m) => (m.key === key ? { ...m, [field]: value } : m)),
     );
   const submit = (e: FormEvent) => {
     e.preventDefault();
+    if (!user || !listingsReady) return;
     void action.run(async () => {
       const data = await post<{ job: { id: string } }>("/jobs", {
         title,
@@ -85,6 +159,11 @@ export function PostJob() {
           amount_cents: amounts[i],
         })),
       });
+      try {
+        sessionStorage.removeItem(jobDraftKey);
+      } catch {
+        /* Publishing does not depend on browser storage. */
+      }
       navigate(`/jobs/${data.job.id}`);
     });
   };
@@ -96,7 +175,7 @@ export function PostJob() {
           each part gets paid.
         </p>
       </PageHeading>
-      {preview && <PreviewNotice />}
+      <PreviewNotice />
       <div className="form-layout">
         <form className="form-stack" onSubmit={submit}>
           <section className="form-section">
@@ -140,6 +219,7 @@ export function PostJob() {
                 Ontario city
                 <input
                   required
+                  minLength={2}
                   maxLength={80}
                   value={city}
                   onChange={(e) => setCity(e.target.value)}
@@ -162,7 +242,13 @@ export function PostJob() {
                 <input
                   type="date"
                   required
-                  min={new Date().toLocaleDateString("en-CA")}
+                  min={new Date().toLocaleDateString("en-CA", {
+                    timeZone: "America/Toronto",
+                  })}
+                  max={new Date(Date.now() + 365 * 86400000).toLocaleDateString(
+                    "en-CA",
+                    { timeZone: "America/Toronto" },
+                  )}
                   value={date}
                   onChange={(e) => setDate(e.target.value)}
                 />
@@ -202,6 +288,7 @@ export function PostJob() {
                       required
                       minLength={3}
                       maxLength={120}
+                      aria-label={`Milestone ${i + 1}`}
                       value={m.title}
                       onChange={(e) => update(m.key, "title", e.target.value)}
                       placeholder="What will be completed?"
@@ -215,6 +302,7 @@ export function PostJob() {
                       max="5000"
                       step="0.01"
                       required
+                      aria-label={`Worker pay (CAD)${milestones.length > 1 ? ` for milestone ${i + 1}` : ""}`}
                       value={m.amount}
                       onChange={(e) => update(m.key, "amount", e.target.value)}
                       placeholder="100.00"
@@ -261,6 +349,12 @@ export function PostJob() {
             </span>
           </label>
           <ActionFeedback {...action} />
+          {draftSaved && (
+            <p className="small-text">
+              Your draft is saved in this tab while you sign in or look around.
+              It is removed after publishing.
+            </p>
+          )}
           {budget > 500000 && (
             <Alert>The job total must be $5,000 CAD or less.</Alert>
           )}
@@ -336,6 +430,7 @@ export function JobPage() {
   const [data, setData] = useState<JobDetail | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [revision, setRevision] = useState(0);
   const action = useAction();
   const [application, setApplication] = useState("");
@@ -345,6 +440,7 @@ export function JobPage() {
   const [rating, setRating] = useState("5");
   useEffect(() => {
     let active = true;
+    setError("");
     if (example) {
       setData({
         job: example,
@@ -382,8 +478,8 @@ export function JobPage() {
       setLoading(false);
       return;
     }
-    setLoading(true);
-    setError("");
+    setLoading(!data || data.job.id !== id);
+    setRefreshing(true);
     api<JobDetail>(`/jobs/${encodeURIComponent(id)}`)
       .then((value) => {
         if (active) setData(value);
@@ -392,14 +488,17 @@ export function JobPage() {
         if (active) setError(e.message);
       })
       .finally(() => {
-        if (active) setLoading(false);
+        if (active) {
+          setLoading(false);
+          setRefreshing(false);
+        }
       });
     return () => {
       active = false;
     };
-  }, [id, revision, example]);
+  }, [id, revision, example, user?.id]);
   if (loading) return <Loading label="Opening job…" />;
-  if (error || !data)
+  if (!data || data.job.id !== id)
     return (
       <div className="page-wrap narrow">
         <Alert>{error || "This job could not be found."}</Alert>
@@ -412,7 +511,13 @@ export function JobPage() {
   const owner = user?.id === job.poster_id,
     worker = user?.id === job.worker_id,
     participant = owner || worker;
-  const activeJob = ["assigned", "in_progress"].includes(job.status);
+  const workReady = config?.launchMode === "live";
+  const listingsReady = config?.listingsReady ?? workReady;
+  const activeJob =
+    workReady && ["assigned", "in_progress"].includes(job.status);
+  const myReview = data.reviews?.find(
+    (review) => review.author_id === user?.id,
+  );
   const refresh = () => setRevision((v) => v + 1);
   const act = (path: string, body: unknown = {}, success = "Updated.") =>
     void action.run(async () => {
@@ -479,6 +584,28 @@ export function JobPage() {
           </button>
         </Alert>
       )}
+      {!example && (
+        <div className="action-row job-refresh">
+          <button
+            type="button"
+            className="button button-outline"
+            disabled={refreshing || action.busy}
+            onClick={refresh}
+          >
+            <RefreshCw size={17} />
+            {refreshing ? "Refreshing…" : "Refresh job"}
+          </button>
+          <span className="small-text">
+            Refresh for new applications, messages and payment updates.
+          </span>
+        </div>
+      )}
+      {!example && <PreviewNotice />}
+      {error && (
+        <Alert>
+          {error} Your last loaded job is still shown. Refresh to try again.
+        </Alert>
+      )}
       <ActionFeedback {...action} />
       <div className="detail-layout">
         <div className="detail-main">
@@ -516,7 +643,6 @@ export function JobPage() {
                           Worker: {money(m.amount_cents)} · Fee:{" "}
                           {money(feeFor(m.amount_cents))} · Total:{" "}
                           {money(m.amount_cents + feeFor(m.amount_cents))} CAD
-                          before applicable taxes
                         </p>
                       )}
                     {!example && activeJob && (
@@ -586,6 +712,12 @@ export function JobPage() {
             (job.status === "open" || user?.is_admin) && (
               <section className="content-section">
                 <h2>Applications</h2>
+                {!workReady && (
+                  <p className="small-text">
+                    You can review applications now. Hiring opens after payment
+                    and launch requirements are complete.
+                  </p>
+                )}
                 {data.applications?.length ? (
                   data.applications.map((a) => (
                     <article className="application" key={a.id}>
@@ -605,7 +737,7 @@ export function JobPage() {
                         a.status === "pending" && (
                           <button
                             className="button"
-                            disabled={action.busy}
+                            disabled={action.busy || !workReady}
                             onClick={() =>
                               act(
                                 `/jobs/${id}/hire`,
@@ -693,52 +825,56 @@ export function JobPage() {
               )}
             </section>
           )}
-          {participant && !example && job.status === "completed" && (
-            <section className="content-section">
-              <h2>How did it go?</h2>
-              <form
-                className="form-stack"
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  act(
-                    `/jobs/${id}/reviews`,
-                    { rating: Number(rating), body: review },
-                    "Your review has been saved.",
-                  );
-                }}
-              >
-                <label>
-                  Rating
-                  <select
-                    value={rating}
-                    onChange={(e) => setRating(e.target.value)}
-                  >
-                    {[5, 4, 3, 2, 1].map((n) => (
-                      <option value={n} key={n}>
-                        {n} {n === 1 ? "star" : "stars"}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  Your review
-                  <textarea
-                    value={review}
-                    onChange={(e) => setReview(e.target.value)}
-                    required
-                    minLength={10}
-                    maxLength={2000}
-                  />
-                </label>
-                <button
-                  className="button button-outline"
-                  disabled={action.busy}
+          {participant &&
+            !example &&
+            workReady &&
+            job.status === "completed" &&
+            !myReview && (
+              <section className="content-section">
+                <h2>How did it go?</h2>
+                <form
+                  className="form-stack"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    act(
+                      `/jobs/${id}/reviews`,
+                      { rating: Number(rating), body: review },
+                      "Your review has been saved.",
+                    );
+                  }}
                 >
-                  Share review
-                </button>
-              </form>
-            </section>
-          )}
+                  <label>
+                    Rating
+                    <select
+                      value={rating}
+                      onChange={(e) => setRating(e.target.value)}
+                    >
+                      {[5, 4, 3, 2, 1].map((n) => (
+                        <option value={n} key={n}>
+                          {n} {n === 1 ? "star" : "stars"}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    Your review
+                    <textarea
+                      value={review}
+                      onChange={(e) => setReview(e.target.value)}
+                      required
+                      minLength={10}
+                      maxLength={2000}
+                    />
+                  </label>
+                  <button
+                    className="button button-outline"
+                    disabled={action.busy}
+                  >
+                    Share review
+                  </button>
+                </form>
+              </section>
+            )}
           {!!data.reviews?.length && (
             <section className="content-section">
               <h2>Reviews</h2>
@@ -808,7 +944,7 @@ export function JobPage() {
                 {job.status === "assigned" && (
                   <button
                     className="button"
-                    disabled={action.busy}
+                    disabled={action.busy || !workReady}
                     onClick={() =>
                       act(`/jobs/${id}/start`, {}, "Job marked in progress.")
                     }
@@ -825,7 +961,7 @@ export function JobPage() {
                   Manage payouts <ArrowRight size={17} />
                 </Link>
               </>
-            ) : job.status === "open" ? (
+            ) : job.status === "open" && listingsReady ? (
               data.myApplication ? (
                 <>
                   <Status value={data.myApplication.status} />
@@ -898,7 +1034,9 @@ export function JobPage() {
               )
             ) : (
               <Alert kind="info">
-                This job is no longer accepting applications.
+                {job.status === "open"
+                  ? "Applications are not open yet. Join early access for launch updates."
+                  : "This job is no longer accepting applications."}
               </Alert>
             )}
             <hr />
@@ -919,12 +1057,11 @@ export function JobPage() {
                 className="form-stack"
                 onSubmit={(e) => {
                   e.preventDefault();
-                  act(
-                    `/jobs/${id}/report`,
-                    { reason: report },
-                    "Report submitted for review.",
-                  );
-                  setReport("");
+                  void action.run(async () => {
+                    await post(`/jobs/${id}/report`, { reason: report });
+                    setReport("");
+                    refresh();
+                  }, "Report submitted for review.");
                 }}
               >
                 <p>

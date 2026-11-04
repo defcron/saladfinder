@@ -486,6 +486,76 @@ describe("marketplace authorization and lifecycle", () => {
       (await request(app, ctx.env, "/jobs", "POST", jobBody(), cookie)).status,
     ).toBe(503);
   });
+  it("opens production listings and applications without enabling hiring or work", async () => {
+    ctx.env.APP_ENV = "production";
+    ctx.env.LISTINGS_ENABLED = "true";
+    poster.cookie = poster.cookie.replace("daywork_local=", "__Host-daywork=");
+    worker.cookie = worker.cookie.replace("daywork_local=", "__Host-daywork=");
+    const job = await create();
+    await apply(job);
+    const d = await detail(job);
+    expect(
+      (
+        await request(
+          app,
+          ctx.env,
+          `/jobs/${job.id}/hire`,
+          "POST",
+          { applicationId: d.applications[0].id },
+          poster.cookie,
+        )
+      ).status,
+    ).toBe(503);
+    expect(
+      (
+        await request(
+          app,
+          ctx.env,
+          `/jobs/${job.id}/start`,
+          "POST",
+          {},
+          worker.cookie,
+        )
+      ).status,
+    ).toBe(503);
+    expect(
+      (
+        await request(
+          app,
+          ctx.env,
+          `/jobs/${job.id}/applications/withdraw`,
+          "POST",
+          {},
+          worker.cookie,
+        )
+      ).status,
+    ).toBe(200);
+    expect(
+      (
+        await request(
+          app,
+          ctx.env,
+          `/jobs/${job.id}/cancel`,
+          "POST",
+          {},
+          worker.cookie,
+        )
+      ).status,
+    ).toBe(409);
+    expect(
+      (
+        await request(
+          app,
+          ctx.env,
+          `/jobs/${job.id}/cancel`,
+          "POST",
+          {},
+          poster.cookie,
+        )
+      ).status,
+    ).toBe(200);
+    expect((await detail(job)).job.status).toBe("cancelled");
+  });
   it("computes budgets, supports escaped search, and does not expose email or payment identifiers publicly", async () => {
     const job = await create();
     expect(job.budget_cents).toBe(18000);
@@ -848,6 +918,109 @@ describe("marketplace authorization and lifecycle", () => {
         )
       ).status,
     ).toBe(401);
+  });
+  it.each(["disputed", "pending_refund", "failed_refund"])(
+    "does not clear a financial hold by restoring a report: %s",
+    async (state) => {
+      const job = await create();
+      await hire(job);
+      const d = await detail(job);
+      const response = await request(
+        app,
+        ctx.env,
+        `/jobs/${job.id}/report`,
+        "POST",
+        {
+          reason: "This booking requires a review before releasing any funds.",
+        },
+        poster.cookie,
+      );
+      const { reportId } = (await response.json()) as { reportId: string };
+      const paymentId = crypto.randomUUID();
+      await ctx.env.DB.prepare(
+        "INSERT INTO payment_attempts (id,milestone_id,attempt,poster_id,worker_id,account_id,amount_cents,fee_cents,status) VALUES (?,?,1,?,?,'acct_test_hold',9000,1180,?)",
+      )
+        .bind(
+          paymentId,
+          d.milestones[0].id,
+          poster.user.id,
+          worker.user.id,
+          state === "disputed" ? "disputed" : "paid",
+        )
+        .run();
+      const admin = await login(
+        app,
+        ctx.env,
+        "operator@example.test",
+        "Operator",
+      );
+      if (state !== "disputed")
+        await ctx.env.DB.prepare(
+          "INSERT INTO refund_intents (payment_attempt_id,operation_id,requested_by,reason,status,amount_cents) VALUES (?,?,?,'Test refund',?,9000)",
+        )
+          .bind(
+            paymentId,
+            crypto.randomUUID(),
+            admin.user.id,
+            state === "failed_refund" ? "failed" : "pending",
+          )
+          .run();
+      const restored = await request(
+        app,
+        ctx.env,
+        `/admin/reports/${reportId}/resolve`,
+        "POST",
+        {
+          resolution: "The local complaint has been reviewed by support.",
+          action: "restore_job",
+        },
+        admin.cookie,
+      );
+      expect(restored.status).toBe(409);
+      expect((await detail(job)).job.status).toBe("disputed");
+      expect(
+        await ctx.env.DB.prepare("SELECT status FROM reports WHERE id=?")
+          .bind(reportId)
+          .first(),
+      ).toMatchObject({ status: "open" });
+    },
+  );
+  it("hides a suspended poster's open listing from direct public and applicant URLs", async () => {
+    const job = await create();
+    const admin = await login(
+      app,
+      ctx.env,
+      "operator@example.test",
+      "Operator",
+    );
+    await ctx.env.DB.prepare("UPDATE users SET suspended_at=? WHERE id=?")
+      .bind(new Date().toISOString(), poster.user.id)
+      .run();
+    expect((await request(app, ctx.env, `/jobs/${job.id}`)).status).toBe(404);
+    expect(
+      (
+        await request(
+          app,
+          ctx.env,
+          `/jobs/${job.id}`,
+          "GET",
+          undefined,
+          worker.cookie,
+        )
+      ).status,
+    ).toBe(404);
+    expect(
+      (
+        await request(
+          app,
+          ctx.env,
+          `/jobs/${job.id}`,
+          "GET",
+          undefined,
+          admin.cookie,
+        )
+      ).status,
+    ).toBe(200);
   });
   it("grants audited moderation reads to active verified administrators only", async () => {
     const job = await create();

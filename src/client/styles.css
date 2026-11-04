@@ -2410,3 +2410,14 @@ code {
     margin-bottom: 10px;
   }
 }
+
+/* Keep status recovery controls readable beside the existing payment layout. */
+.align-start {
+  align-self: flex-start;
+}
+.payout-quote {
+  margin: 0;
+}
+.job-refresh {
+  margin: 20px 0;
+}

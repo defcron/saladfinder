@@ -16,6 +16,7 @@ import {
   ActionFeedback,
   Alert,
   PageHeading,
+  PreviewNotice,
   Turnstile,
   useAction,
 } from "../components";
@@ -397,6 +398,7 @@ export function HowItWorks() {
           find their next job.
         </p>
       </PageHeading>
+      <PreviewNotice />
       <div className="how-steps">
         {[
           {
@@ -447,9 +449,11 @@ export function HowItWorks() {
           <li>
             <h3>Payout requested</h3>
             <p>
-              Choose a standard bank payout, or an instant payout if eligible.
-              Canadian instant payouts currently use supported debit cards
-              linked to bank accounts.
+              Instant Payout is selected when your Stripe account and balance
+              are eligible. You can choose a standard bank payout instead, then
+              request it yourself. Canadian Instant Payouts use supported debit
+              cards linked to bank accounts. SaladFinder adds no worker payout
+              fee for either choice.
             </p>
           </li>
           <li>
@@ -580,16 +584,21 @@ export function InfoPage({ kind }: { kind: "trust" | "terms" | "privacy" }) {
         <>
           <Alert kind="info">
             {config?.launchMode === "preview"
-              ? "SaladFinder is in prelaunch preview. Example listings cannot be booked, and real payments are disabled."
+              ? config.listingsReady
+                ? "Posting and applications are open. Hiring, starting work and payments are not available yet. Example listings cannot be booked."
+                : "SaladFinder is in prelaunch preview. Example listings cannot be booked, and real payments are disabled."
               : "Read the job agreement and payment total before accepting work or making a payment."}
           </Alert>
           <h2>Who this preview is for</h2>
           <p>
             SaladFinder is a project maintained by defcron for an initial
             Ontario, Canada launch. You must be at least 18. These terms cover
-            browsing the preview and joining early access. The operator’s legal
-            identity, support process, and final transaction terms must be
-            published before paid jobs open.
+            browsing, account creation, profiles, early-access signups, and any
+            enabled posting and application features. An application expresses
+            interest; it does not hire a worker or authorize work to start.
+            During the listing preview, do not arrange work or payment through
+            the service. The operator’s legal identity, support process, and
+            final transaction terms must be published before paid jobs open.
           </p>
           <h2>Early access</h2>
           <p>
@@ -622,11 +631,13 @@ export function InfoPage({ kind }: { kind: "trust" | "terms" | "privacy" }) {
           </p>
           <h2>Disputes and cancellations</h2>
           <p>
-            Report a problem through the job page when accounts open. Unpaid
-            jobs may be cancelled when their payment state permits it. Paid work
-            requires review before a refund. A refund is subject to the
-            circumstances, applicable rights, and Stripe processing; a request
-            does not automatically establish entitlement.
+            Signed-in users can report a problem through the job page. A poster
+            can cancel an open listing, and applicants can withdraw pending
+            applications. Once paid work opens, cancellation depends on the job
+            and payment state. Paid work requires review before a refund. A
+            refund is subject to the circumstances, applicable rights, and
+            Stripe processing; a request does not automatically establish
+            entitlement.
           </p>
           <h2>Availability and changes</h2>
           <p>
@@ -661,10 +672,12 @@ export function InfoPage({ kind }: { kind: "trust" | "terms" | "privacy" }) {
           </p>
           <h2>Why we use it</h2>
           <p>
-            We use signup information to plan the Ontario launch, understand
-            demand by city, and provide launch communications when that system
-            is available. No confirmation email is sent during this initial
-            preview. We do not sell your signup information.
+            We use early-access signup information to plan the Ontario launch,
+            understand demand by city, and provide launch communications when
+            that system is available. Early-access signup does not send a
+            confirmation email. Account sign-in is separate and sends the
+            requested sign-in link through the configured email provider. We do
+            not sell your signup information.
           </p>
           <h2>Providers and storage</h2>
           <p>
@@ -672,8 +685,9 @@ export function InfoPage({ kind }: { kind: "trust" | "terms" | "privacy" }) {
             Canada under the provider’s infrastructure and terms. Cloudflare
             Turnstile helps protect forms against abuse. When payment features
             open, Stripe will collect payment-account information on its own
-            hosted pages. A configured transactional email provider will handle
-            essential account messages when sign-in opens.
+            hosted pages. The configured transactional email provider handles
+            sign-in links and essential account messages. Business-mail
+            forwarding routes support requests to the operator’s inbox.
           </p>
           <h2>Your choices</h2>
           <p>
@@ -692,14 +706,27 @@ export function InfoPage({ kind }: { kind: "trust" | "terms" | "privacy" }) {
             preview is closed and the list is no longer needed. Operational and
             backup copies may persist for their normal retention period.
           </p>
-          <h2>When accounts open</h2>
+          <h2>Accounts, listings and applications</h2>
           <p>
             Accounts use verified email sign-in links and secure session
-            cookies. Profiles, job listings, applications, messages, and reviews
-            will be stored to operate the marketplace. Public listing
-            information is visible to visitors; private job conversations are
-            limited to participants and authorised administration. Do not put
-            sensitive personal information in public listings.
+            cookies. We store your name, email, chosen role, profile, skills,
+            consent records, listings and applications to operate enabled
+            features. Public job descriptions, general locations and poster
+            names are visible to visitors. Applications and applicant profile
+            information are shown to the poster and authorised administration.
+            When hiring opens, private job conversations are limited to
+            participants and authorised administration, and reviews are visible
+            with the job. Do not put sensitive personal information in listings
+            or profiles.
+          </p>
+          <p>
+            Your account page lets you download your records and revoke active
+            sessions. Contact the operator about correction or removal of
+            account data; operational, dispute or legal retention requirements
+            may apply. Job drafts and a pending payout request reference may be
+            saved in this tab’s session storage so navigation or a lost response
+            does not lose your work. This browser storage does not authorize a
+            payment; the server verifies the account, amount and request.
           </p>
           <h2>Contact the operator</h2>
           <Contact />

@@ -56,6 +56,10 @@ type RefundIntent = {
   created_at: string;
 };
 type StripeFactory = (env: Env) => Stripe;
+const payoutLimits = {
+  instant: { minimum_cents: 60, maximum_cents: 999900 },
+  standard: { minimum_cents: 100, maximum_cents: 999900 },
+} as const;
 const now = () => new Date().toISOString();
 const objectId = (value: string | { id: string } | null | undefined) =>
   typeof value === "string" ? value : value?.id;
@@ -86,7 +90,7 @@ function assertPaymentAccess(env: Env) {
     });
   if (
     env.APP_ENV === "staging" &&
-    !/^(sk|rk)_test_/.test(env.STRIPE_SECRET_KEY!)
+    !/^(sk|rk|rkcs)_test_/.test(env.STRIPE_SECRET_KEY!)
   )
     throw new HTTPException(503, {
       message: "Staging requires Stripe test-mode credentials.",
@@ -94,11 +98,86 @@ function assertPaymentAccess(env: Env) {
 }
 function freshRetry(createdAt: string) {
   // Stripe may prune idempotency keys after 24 hours. Never retry an ambiguous creation after that window.
-  if (Date.now() - Date.parse(createdAt) > 23 * 60 * 60 * 1000)
+  if (!canRetry(createdAt))
     throw new HTTPException(409, {
       message:
         "This payment operation needs support reconciliation before retrying.",
     });
+}
+const canRetry = (createdAt: string) =>
+  Number.isFinite(Date.parse(createdAt)) &&
+  Date.now() - Date.parse(createdAt) <= 23 * 60 * 60 * 1000;
+
+async function connectedAccount(stripe: Stripe, accountId: string) {
+  const account = await stripe.v2.core.accounts.retrieve(accountId, {
+    include: ["configuration.recipient", "identity", "requirements"],
+  });
+  const capabilities =
+    account.configuration?.recipient?.capabilities?.stripe_balance;
+  const canadian =
+    account.identity?.country?.toUpperCase() === "CA" && !account.closed;
+  return {
+    account,
+    transfersEnabled:
+      canadian && capabilities?.stripe_transfers?.status === "active",
+    payoutsEnabled: canadian && capabilities?.payouts?.status === "active",
+  };
+}
+
+async function externalDestinations(stripe: Stripe, accountId: string) {
+  const accounts = await stripe.accounts.listExternalAccounts(accountId, {
+    limit: 100,
+  });
+  // Bound provider work and fail closed rather than choosing from an incomplete list.
+  if (accounts.has_more)
+    throw new HTTPException(409, {
+      message:
+        "Review your payout accounts in Stripe before requesting a payout.",
+    });
+  return accounts.data.filter((destination) => destination.currency === "cad");
+}
+
+function eligibleDestinations(
+  balance: Stripe.Balance,
+  destinations: Stripe.ExternalAccount[],
+) {
+  const instant = balance.instant_available?.find(
+    (value) => value.currency === "cad",
+  );
+  const instantDestinations = (instant?.net_available ?? [])
+    .filter((value) =>
+      destinations.some(
+        (destination) =>
+          destination.id === value.destination &&
+          destination.object === "card" &&
+          destination.available_payout_methods?.includes("instant"),
+      ),
+    )
+    .sort(
+      (a, b) =>
+        b.amount - a.amount || a.destination.localeCompare(b.destination),
+    );
+  const banks = destinations
+    .filter(
+      (destination): destination is Stripe.BankAccount =>
+        destination.object === "bank_account" &&
+        !["errored", "verification_failed"].includes(destination.status) &&
+        Boolean(destination.available_payout_methods?.includes("standard")),
+    )
+    .sort(
+      (a, b) =>
+        Number(Boolean(b.default_for_currency)) -
+          Number(Boolean(a.default_for_currency)) || a.id.localeCompare(b.id),
+    );
+  return {
+    instant: instantDestinations,
+    standard: banks[0] ?? null,
+    // Each entry represents the same balance at a different destination, never additive funds.
+    instantAmount: Math.max(
+      0,
+      ...instantDestinations.map((value) => value.amount),
+    ),
+  };
 }
 async function body<T extends z.ZodType>(
   request: Request,
@@ -115,7 +194,7 @@ async function frozen(db: D1Database, userId: string) {
   return Boolean(
     await db
       .prepare(
-        "SELECT id FROM jobs WHERE worker_id = ? AND status = 'disputed' LIMIT 1",
+        "SELECT j.id FROM jobs j WHERE j.worker_id = ? AND (j.status = 'disputed' OR EXISTS (SELECT 1 FROM payment_attempts p JOIN milestones m ON m.id = p.milestone_id LEFT JOIN refund_intents r ON r.payment_attempt_id = p.id WHERE m.job_id = j.id AND (p.status = 'disputed' OR r.status NOT IN ('succeeded','canceled')))) LIMIT 1",
       )
       .bind(userId)
       .first(),
@@ -290,6 +369,11 @@ export function createPaymentsRouter(
     await rateLimit(c, "payment-status", user.id, 30, 60);
     const configured = stripeConfigured(c.env) && c.env.LAUNCH_MODE === "live";
     const testMode = !/^(sk|rk)_live_/.test(c.env.STRIPE_SECRET_KEY ?? "");
+    const pending = await c.env.DB.prepare(
+      "SELECT * FROM payout_intents WHERE user_id = ? AND status = 'creating' LIMIT 1",
+    )
+      .bind(user.id)
+      .first<PayoutIntent>();
     const base = {
       configured,
       testMode,
@@ -298,6 +382,22 @@ export function createPaymentsRouter(
       chargesEnabled: false,
       payoutsEnabled: false,
       instantEligible: false,
+      standardEligible: false,
+      defaultPayoutMethod: null as "instant" | "standard" | null,
+      accountId: user.stripe_account_id ?? null,
+      payoutSchedule: null as string | null,
+      payoutSetupRequired: false,
+      payoutLimits,
+      pendingPayout: pending
+        ? {
+            requestId: pending.request_id,
+            method: pending.method,
+            amount_cents: pending.amount_cents,
+            retryable:
+              pending.account_id === user.stripe_account_id &&
+              canRetry(pending.created_at),
+          }
+        : null,
       frozen: false,
     };
     if (!configured)
@@ -312,47 +412,63 @@ export function createPaymentsRouter(
           "Connect Stripe to receive payments. Bank arrival depends on eligibility.",
       });
     const stripe = makeStripe(c.env);
-    const [account, balance, payouts, held] = await Promise.all([
-      stripe.accounts.retrieve(user.stripe_account_id),
-      stripe.balance.retrieve(
-        { expand: ["instant_available.net_available"] },
-        { stripeAccount: user.stripe_account_id },
-      ),
-      stripe.payouts.list(
-        { limit: 20 },
-        { stripeAccount: user.stripe_account_id },
-      ),
-      frozen(c.env.DB, user.id),
-    ]);
+    const [readiness, balance, payouts, held, destinations, settings] =
+      await Promise.all([
+        connectedAccount(stripe, user.stripe_account_id),
+        stripe.balance.retrieve(
+          { expand: ["instant_available.net_available"] },
+          { stripeAccount: user.stripe_account_id },
+        ),
+        stripe.payouts.list(
+          { limit: 20 },
+          { stripeAccount: user.stripe_account_id },
+        ),
+        frozen(c.env.DB, user.id),
+        externalDestinations(stripe, user.stripe_account_id),
+        stripe.balanceSettings.retrieve(
+          {},
+          { stripeAccount: user.stripe_account_id },
+        ),
+      ]);
     const available =
       balance.available.find((x) => x.currency === "cad")?.amount ?? 0;
-    const pending =
+    const pendingAmount =
       balance.pending.find((x) => x.currency === "cad")?.amount ?? 0;
-    const instant = balance.instant_available?.find(
-      (x) => x.currency === "cad",
-    );
-    // net_available is per eligible destination; never sum destinations, which would double-count the same balance.
-    const instantAmount = Math.max(
-      0,
-      ...(instant?.net_available?.map((x) => x.amount) ?? []),
-    );
-    const ready =
-      account.capabilities?.transfers === "active" &&
-      account.payouts_enabled &&
-      account.country === "CA";
+    const options = eligibleDestinations(balance, destinations);
+    const payoutSchedule =
+      settings.payments.payouts?.schedule?.interval ?? null;
+    const ready = readiness.transfersEnabled && readiness.payoutsEnabled;
+    const instantEligible =
+      ready &&
+      !held &&
+      options.instantAmount >= payoutLimits.instant.minimum_cents;
+    const standardEligible =
+      ready &&
+      !held &&
+      payoutSchedule === "manual" &&
+      Boolean(options.standard) &&
+      available >= payoutLimits.standard.minimum_cents;
     return c.json({
-      configured,
-      testMode,
+      ...base,
       accountReady: ready,
-      onboardingComplete: account.details_submitted,
-      chargesEnabled: account.charges_enabled,
-      payoutsEnabled: account.payouts_enabled,
-      instantEligible: ready && !held && instantAmount >= 60,
+      onboardingComplete: ready,
+      // Recipient accounts receive transfers rather than accepting direct charges.
+      chargesEnabled: false,
+      payoutsEnabled: readiness.payoutsEnabled,
+      instantEligible,
+      standardEligible,
+      defaultPayoutMethod: instantEligible
+        ? "instant"
+        : standardEligible
+          ? "standard"
+          : null,
+      payoutSchedule,
+      payoutSetupRequired: payoutSchedule !== "manual",
       frozen: held,
       balance: {
         available_cents: available,
-        pending_cents: pending,
-        instant_available_cents: instantAmount,
+        pending_cents: pendingAmount,
+        instant_available_cents: options.instantAmount,
         currency: "CAD",
       },
       payouts: payouts.data.map(compactPayout),
@@ -360,7 +476,7 @@ export function createPaymentsRouter(
         ? "In-app payout requests are paused while a reported job is reviewed. Existing Stripe transfers and payouts are not recalled."
         : testMode
           ? "Stripe test mode: no real money moves and no bank payout occurs."
-          : "Instant payouts require an eligible debit card and available balance; arrival is usually within 30 minutes, but may take longer. Standard bank payouts follow Stripe’s schedule.",
+          : "Request an instant payout to an eligible debit card or a standard payout to a linked bank account. Instant arrival is usually within 30 minutes, but delays can occur. Standard payouts take longer; settlement and bank processing still apply.",
     });
   });
 
@@ -368,10 +484,6 @@ export function createPaymentsRouter(
     assertPaymentAccess(c.env);
     const user = c.get("user")!;
     await rateLimit(c, "connect-onboard", user.id, 10, 3600);
-    if (user.role === "poster")
-      throw new HTTPException(403, {
-        message: "A worker profile is required to receive payments.",
-      });
     const stripe = makeStripe(c.env);
     let accountId = user.stripe_account_id;
     if (!accountId) {
@@ -436,6 +548,15 @@ export function createPaymentsRouter(
         .bind(accountId, user.id)
         .run();
     }
+    // Users explicitly enter onboarding to enable in-app withdrawals. Manual
+    // scheduling leaves the choice of instant or standard payout with them.
+    await stripe.balanceSettings.update(
+      { payments: { payouts: { schedule: { interval: "manual" } } } },
+      {
+        stripeAccount: accountId!,
+        idempotencyKey: `manual-payouts-${accountId}-${crypto.randomUUID()}`,
+      },
+    );
     const link = await stripe.v2.core.accountLinks.create({
       account: accountId!,
       use_case: {
@@ -465,12 +586,8 @@ export function createPaymentsRouter(
     const item = await milestone(c.env.DB, c.req.param("id"));
     requirePayable(item, user.id);
     const stripe = makeStripe(c.env);
-    const account = await stripe.accounts.retrieve(item.account_id!);
-    if (
-      account.country !== "CA" ||
-      account.capabilities?.transfers !== "active" ||
-      !account.payouts_enabled
-    )
+    const readiness = await connectedAccount(stripe, item.account_id!);
+    if (!readiness.transfersEnabled || !readiness.payoutsEnabled)
       throw new HTTPException(409, {
         message:
           "The worker’s Stripe account is not ready to receive payments.",
@@ -606,144 +723,316 @@ export function createPaymentsRouter(
   });
 
   router.post("/payments/payout", requireUser, async (c) => {
-    assertPaymentAccess(c.env);
     const user = c.get("user")!;
-    await rateLimit(c, "payout", user.id, 20, 3600);
-    const input = await body(
-      c.req.raw,
-      z.object({
-        method: z.enum(["instant", "standard"]),
-        amount_cents: z.number().int().positive().max(999900),
-        requestId: z.uuid(),
-      }),
-    );
-    if (!user.stripe_account_id)
-      throw new HTTPException(409, { message: "Connect Stripe first." });
-    const stripe = makeStripe(c.env);
-    let operation = await c.env.DB.prepare(
-      "SELECT * FROM payout_intents WHERE request_id = ?",
-    )
-      .bind(input.requestId)
-      .first<PayoutIntent>();
-    if (
-      operation &&
-      (operation.user_id !== user.id ||
-        operation.amount_cents !== input.amount_cents ||
-        operation.method !== input.method)
-    )
-      throw new HTTPException(409, {
-        message: "This request identifier belongs to a different payout.",
-      });
-    if (operation?.payout_id)
-      return c.json({
-        payout: compactPayout(
-          await stripe.payouts.retrieve(
-            operation.payout_id,
-            {},
-            { stripeAccount: user.stripe_account_id },
-          ),
-        ),
-      });
-    if (await frozen(c.env.DB, user.id))
-      throw new HTTPException(409, {
-        message: "Payouts are paused while a reported job is reviewed.",
-      });
-    if (input.amount_cents < (input.method === "instant" ? 60 : 100))
-      throw new HTTPException(400, {
-        message: "The payout amount is below the supported minimum.",
-      });
-    const account = await stripe.accounts.retrieve(user.stripe_account_id);
-    if (!account.payouts_enabled || account.country !== "CA")
-      throw new HTTPException(409, {
-        message: "Stripe payouts are not enabled for this account.",
-      });
-    if (!operation) {
-      const balance = await stripe.balance.retrieve(
-        { expand: ["instant_available.net_available"] },
-        { stripeAccount: user.stripe_account_id },
+    let operation: PayoutIntent | null = null;
+    let requestId: string | undefined;
+    let payoutInput:
+      | {
+          method: "instant" | "standard";
+          amount_cents: number;
+          requestId: string;
+        }
+      | undefined;
+    let firstSubmission = false;
+    let knownUncreated = false;
+    try {
+      assertPaymentAccess(c.env);
+      await rateLimit(c, "payout", user.id, 20, 3600);
+      const input = await body(
+        c.req.raw,
+        z.object({
+          method: z.enum(["instant", "standard"]),
+          amount_cents: z.number().int().positive().max(999900),
+          requestId: z.uuid(),
+        }),
       );
-      let destination: string | null = null;
-      if (input.method === "instant") {
-        const eligible = balance.instant_available
-          ?.find((x) => x.currency === "cad")
-          ?.net_available?.find((x) => x.amount >= input.amount_cents);
-        if (!eligible)
-          throw new HTTPException(409, {
-            message:
-              "No eligible instant destination has enough available funds. Choose a standard payout or try later.",
-          });
-        destination = eligible.destination;
-      } else if (
-        (balance.available.find((x) => x.currency === "cad")?.amount ?? 0) <
-        input.amount_cents
-      )
-        throw new HTTPException(409, {
-          message: "The payout exceeds your available CAD balance.",
-        });
-      await c.env.DB.prepare(
-        "INSERT OR IGNORE INTO payout_intents (request_id,user_id,account_id,method,amount_cents,destination) VALUES (?,?,?,?,?,?)",
-      )
-        .bind(
-          input.requestId,
-          user.id,
-          user.stripe_account_id,
-          input.method,
-          input.amount_cents,
-          destination,
-        )
-        .run();
-      operation = await c.env.DB.prepare(
+      requestId = input.requestId;
+      payoutInput = input;
+      if (!user.stripe_account_id)
+        throw new HTTPException(409, { message: "Connect Stripe first." });
+      const stripe = makeStripe(c.env);
+      const stored = await c.env.DB.prepare(
         "SELECT * FROM payout_intents WHERE request_id = ?",
       )
         .bind(input.requestId)
         .first<PayoutIntent>();
-      if (!operation)
+      if (
+        stored &&
+        (stored.user_id !== user.id ||
+          stored.account_id !== user.stripe_account_id ||
+          stored.amount_cents !== input.amount_cents ||
+          stored.method !== input.method)
+      )
+        throw new HTTPException(409, {
+          message: "This request identifier belongs to a different payout.",
+        });
+      operation = stored;
+      if (!stored) {
+        const outstanding = await c.env.DB.prepare(
+          "SELECT request_id FROM payout_intents WHERE user_id = ? AND status = 'creating' LIMIT 1",
+        )
+          .bind(user.id)
+          .first();
+        knownUncreated = !outstanding;
+      }
+      if (operation?.status === "rejected")
         throw new HTTPException(409, {
           message:
-            "Another payout is processing. Retry its original request or contact support.",
+            "Stripe rejected this payout before creating it. Refresh your balance and start a new request.",
         });
-    }
-    // Recheck after INSERT OR IGNORE: a concurrent request may have claimed the same identifier.
-    if (
-      operation.user_id !== user.id ||
-      operation.account_id !== user.stripe_account_id ||
-      operation.method !== input.method ||
-      operation.amount_cents !== input.amount_cents
-    )
-      throw new HTTPException(409, {
-        message: "This request identifier belongs to a different payout.",
-      });
-    freshRetry(operation.created_at);
-    const payout = await stripe.payouts.create(
-      {
-        amount: operation.amount_cents,
-        currency: "cad",
-        method: operation.method,
-        ...(operation.destination
-          ? { destination: operation.destination }
-          : {}),
-        metadata: {
-          request_id: operation.request_id,
-          daywork_user_id: user.id,
-        },
-      },
-      {
-        stripeAccount: operation.account_id,
-        idempotencyKey: `payout-${operation.request_id}`,
-      },
-    );
-    await c.env.DB.prepare(
-      "UPDATE payout_intents SET payout_id = ?, status = CASE WHEN status = 'creating' THEN ? ELSE status END, arrival_date = ?, updated_at = ? WHERE request_id = ?",
-    )
-      .bind(
-        payout.id,
-        payout.status,
-        payout.arrival_date,
-        now(),
-        operation.request_id,
+      if (operation?.payout_id) {
+        const payout = await stripe.payouts.retrieve(
+          operation.payout_id,
+          {},
+          { stripeAccount: operation.account_id },
+        );
+        return c.json({ payout: compactPayout(payout) });
+      }
+      if (await frozen(c.env.DB, user.id))
+        throw new HTTPException(409, {
+          message: "Payouts are paused while a reported job is reviewed.",
+        });
+      if (input.amount_cents < payoutLimits[input.method].minimum_cents)
+        throw new HTTPException(400, {
+          message: "The payout amount is below the supported minimum.",
+        });
+      const readiness = await connectedAccount(stripe, user.stripe_account_id);
+      if (!readiness.payoutsEnabled || !readiness.transfersEnabled)
+        throw new HTTPException(409, {
+          message: "Stripe payouts are not enabled for this account.",
+        });
+      if (!operation) {
+        const [balance, destinations, settings] = await Promise.all([
+          stripe.balance.retrieve(
+            { expand: ["instant_available.net_available"] },
+            { stripeAccount: user.stripe_account_id },
+          ),
+          externalDestinations(stripe, user.stripe_account_id),
+          stripe.balanceSettings.retrieve(
+            {},
+            { stripeAccount: user.stripe_account_id },
+          ),
+        ]);
+        const options = eligibleDestinations(balance, destinations);
+        let destination: string;
+        if (input.method === "instant") {
+          const eligible = options.instant.find(
+            (value) => value.amount >= input.amount_cents,
+          );
+          if (!eligible)
+            throw new HTTPException(409, {
+              message:
+                "No eligible instant destination has enough available funds. Choose a standard payout or try later.",
+            });
+          destination = eligible.destination;
+        } else {
+          if (settings.payments.payouts?.schedule?.interval !== "manual")
+            throw new HTTPException(409, {
+              message:
+                "Complete payout setup to request standard bank payouts in SaladFinder.",
+            });
+          if (!options.standard)
+            throw new HTTPException(409, {
+              message:
+                "Add an eligible CAD bank account in Stripe to request a standard bank payout.",
+            });
+          if (
+            (balance.available.find((value) => value.currency === "cad")
+              ?.amount ?? 0) < input.amount_cents
+          )
+            throw new HTTPException(409, {
+              message: "The payout exceeds your available CAD balance.",
+            });
+          destination = options.standard.id;
+        }
+        knownUncreated = false;
+        const inserted = await c.env.DB.prepare(
+          "INSERT OR IGNORE INTO payout_intents (request_id,user_id,account_id,method,amount_cents,destination) VALUES (?,?,?,?,?,?)",
+        )
+          .bind(
+            input.requestId,
+            user.id,
+            user.stripe_account_id,
+            input.method,
+            input.amount_cents,
+            destination,
+          )
+          .run();
+        firstSubmission = inserted.meta.changes === 1;
+        const claimed = await c.env.DB.prepare(
+          "SELECT * FROM payout_intents WHERE request_id = ?",
+        )
+          .bind(input.requestId)
+          .first<PayoutIntent>();
+        if (!claimed)
+          throw new HTTPException(409, {
+            message:
+              "Another payout is processing. Retry its original request or contact support.",
+          });
+        // Another request may have claimed this identifier while Stripe was queried.
+        if (
+          claimed.user_id !== user.id ||
+          claimed.account_id !== user.stripe_account_id ||
+          claimed.method !== input.method ||
+          claimed.amount_cents !== input.amount_cents
+        )
+          throw new HTTPException(409, {
+            message: "This request identifier belongs to a different payout.",
+          });
+        operation = claimed;
+        knownUncreated = false;
+      }
+      if (operation.status === "rejected")
+        throw new HTTPException(409, {
+          message:
+            "Stripe rejected this payout before creating it. Refresh your balance and start a new request.",
+        });
+      freshRetry(operation.created_at);
+      let payout: Stripe.Payout;
+      try {
+        payout = await stripe.payouts.create(
+          {
+            amount: operation.amount_cents,
+            currency: "cad",
+            method: operation.method,
+            ...(operation.destination
+              ? { destination: operation.destination }
+              : {}),
+            metadata: {
+              request_id: operation.request_id,
+              daywork_user_id: user.id,
+            },
+          },
+          {
+            stripeAccount: operation.account_id,
+            idempotencyKey: `payout-${operation.request_id}`,
+            // Surface the first ambiguous response so a later retry cannot be
+            // mistaken for a definitive rejection of an unattempted payout.
+            maxNetworkRetries: 0,
+          },
+        );
+      } catch (error) {
+        // Only explicit provider validation failures prove no payout was created.
+        // Timeouts, 5xx and unrecognized failures keep the original request locked.
+        if (
+          firstSubmission &&
+          error instanceof Stripe.errors.StripeInvalidRequestError &&
+          error.statusCode === 400 &&
+          [
+            "balance_insufficient",
+            "amount_too_small",
+            "amount_too_large",
+            "instant_payouts_config_disabled",
+            "instant_payouts_limit_exceeded",
+            "instant_payouts_unsupported",
+            "payouts_limit_exceeded",
+            "payouts_not_allowed",
+          ].includes(error.code ?? "")
+        ) {
+          await c.env.DB.prepare(
+            "UPDATE payout_intents SET status = 'rejected', updated_at = ? WHERE request_id = ? AND status = 'creating' AND payout_id IS NULL",
+          )
+            .bind(now(), operation.request_id)
+            .run();
+          operation = await c.env.DB.prepare(
+            "SELECT * FROM payout_intents WHERE request_id = ?",
+          )
+            .bind(operation.request_id)
+            .first<PayoutIntent>();
+          throw new HTTPException(409, {
+            message:
+              "Stripe could not create this payout. Refresh your balance and eligibility before choosing a new payout request.",
+          });
+        }
+        throw error;
+      }
+      if (
+        payout.amount !== operation.amount_cents ||
+        payout.currency !== "cad" ||
+        payout.method !== operation.method ||
+        (operation.destination &&
+          objectId(payout.destination) !== operation.destination)
       )
-      .run();
-    return c.json({ payout: compactPayout(payout) });
+        throw new Error("Payout response requires reconciliation.");
+      await c.env.DB.prepare(
+        "UPDATE payout_intents SET payout_id = ?, status = CASE WHEN status = 'creating' THEN ? ELSE status END, arrival_date = ?, updated_at = ? WHERE request_id = ?",
+      )
+        .bind(
+          payout.id,
+          payout.status,
+          payout.arrival_date,
+          now(),
+          operation.request_id,
+        )
+        .run();
+      return c.json({ payout: compactPayout(payout) });
+    } catch (error) {
+      if (knownUncreated && payoutInput && user.stripe_account_id) {
+        // Claim an unsubmitted request as rejected before declaring a new UUID
+        // safe. A concurrent caller must see that durable rejection before
+        // submitting, or its existing intent wins and remains unresolved here.
+        knownUncreated = false;
+        try {
+          await c.env.DB.prepare(
+            "INSERT OR IGNORE INTO payout_intents (request_id,user_id,account_id,method,amount_cents,status) VALUES (?,?,?,?,?,'rejected')",
+          )
+            .bind(
+              payoutInput.requestId,
+              user.id,
+              user.stripe_account_id,
+              payoutInput.method,
+              payoutInput.amount_cents,
+            )
+            .run();
+          const winner = await c.env.DB.prepare(
+            "SELECT * FROM payout_intents WHERE request_id = ?",
+          )
+            .bind(payoutInput.requestId)
+            .first<PayoutIntent>();
+          if (
+            winner &&
+            winner.user_id === user.id &&
+            winner.account_id === user.stripe_account_id &&
+            winner.method === payoutInput.method &&
+            winner.amount_cents === payoutInput.amount_cents
+          )
+            operation = winner;
+        } catch {
+          // A failed lookup/write cannot establish that no payout was created.
+        }
+      }
+      const unresolved = Boolean(
+        operation && !operation.payout_id && operation.status !== "rejected",
+      );
+      const confirmed = Boolean(operation?.payout_id);
+      const retryable = unresolved && canRetry(operation!.created_at);
+      return c.json(
+        {
+          error:
+            error instanceof HTTPException
+              ? error.message
+              : unresolved
+                ? "The payout result is not yet confirmed. Retry only this same request or contact support; do not start a second payout."
+                : "Unable to check payout information. Please try again.",
+          payoutRequest: {
+            state: unresolved
+              ? "unresolved"
+              : confirmed
+                ? "confirmed"
+                : operation?.status === "rejected"
+                  ? "rejected"
+                  : knownUncreated
+                    ? "not_created"
+                    : "unknown",
+            ...(requestId ? { requestId } : {}),
+            retryable,
+            safeToRetryNew: knownUncreated || operation?.status === "rejected",
+            reconciliationRequired: unresolved && !retryable,
+          },
+        },
+        error instanceof HTTPException ? error.status : 503,
+      );
+    }
   });
 
   router.post("/admin/milestones/:id/refund", requireAdmin, async (c) => {
@@ -1094,7 +1383,13 @@ export function createPaymentsRouter(
           );
           if (
             payout.amount !== operation.amount_cents ||
-            payout.currency !== "cad"
+            payout.currency !== "cad" ||
+            payout.method !== operation.method ||
+            (operation.payout_id && payout.id !== operation.payout_id) ||
+            (operation.destination &&
+              objectId(payout.destination) !== operation.destination) ||
+            payout.metadata?.request_id !== operation.request_id ||
+            payout.metadata?.daywork_user_id !== operation.user_id
           )
             throw new HTTPException(400, {
               message: "Payout reconciliation mismatch.",

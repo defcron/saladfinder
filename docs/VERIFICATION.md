@@ -1,8 +1,56 @@
 # Verification record
 
-Verified on **2026-11-04**. This record distinguishes local regression tests, deployed preview checks, and provider acceptance. The latest release below supersedes the historical deployment snapshots that follow it.
+Updated on **2026-11-04**. This record distinguishes implementation, local regression tests, deployed preview checks and provider acceptance. Completed checks are recorded separately from pending release work. Historical snapshots below describe the state at their original checkpoints.
 
-## Cloudflare DNS and email activation — 2026-11-04
+## Listings pilot and payout hardening — 2026-11-04
+
+The current release is deployed with `LISTINGS_ENABLED=true` and `LAUNCH_MODE=preview`. That combination allows verified posting, applications, withdrawal, cancellation and reports while keeping hiring, work progression and money routes blocked. Production paid launch remains blocked by incomplete Stripe owner verification and outstanding Connect acceptance; no private account requirements or identifiers are published here.
+
+Implemented changes include conditional instant-payout default selection, an explicit standard CAD bank destination, Accounts v2 capability readiness, user-initiated manual payout setup, destination-specific instant balance checks, financial-hold checks independent of a local report, and durable payout-request recovery across reloads. Ambiguous requests retain their original identifier; a new request is permitted only after a definitive rejection is recorded without racing a concurrent creation. The administrator allowlist is installed as a Cloudflare secret; private administrator addresses are not published.
+
+| Release check                        | Result                                                                                                                                          |
+| ------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `npm run check`                      | Passed typecheck, all 151 automated tests and application build                                                                                 |
+| `npm run coverage`                   | All 151 tests passed; 91.52% statements, 85.29% branches, 93.04% functions, 93.00% lines                                                        |
+| `npm run test:e2e`                   | All 18 Playwright desktop/mobile tests passed                                                                                                   |
+| Pages gateway build                  | Passed                                                                                                                                          |
+| Production Worker deployment dry run | Passed                                                                                                                                          |
+| Apex HTTPS and redirect              | Valid certificate; root, path and query redirected with 308 to `www.saladfinder.com`; preserved `kycaml` configuration                          |
+| Production Worker deployment         | Version `30875c46-fa9c-4da5-a3cf-eeca32254327` serving 100% after administrator secret installation at 11:40:55 UTC                             |
+| Live configuration                   | `authReady=true`, `listingsReady=true`, `paymentsReady=false`, `LAUNCH_MODE=preview`                                                            |
+| Canonical-host browser checks        | Desktop 1440px and mobile 390px: home, example listing and post-to-sign-in flow passed without page errors or authentication writes             |
+| Native app email function            | Actual `sendSignInEmail` function accepted by the native binding at 11:41:40 UTC; exact test message observed in the designated Workspace inbox |
+
+The email check imported the application's real sending function into a temporary authenticated Worker restricted to a fixed recipient. It established native payload acceptance and actual delivery; it did not submit the production sign-in form, create an account, accept legal consent or consume a real sign-in token. The temporary Worker was deleted and deletion confirmed. End-to-end production sign-in, token reuse rejection and the authenticated listings pilot still require acceptance. No private recipient, authentication token or message content is published.
+
+Isolated staging is deployed at <https://daywork-staging.defcronyke.workers.dev>, version `8f415e8a-2f56-4582-a1b2-2aa803175f26` serving 100%. Its remote D1 migrations are applied, and configuration returns `authReady=true`, `listingsReady=true`, `paymentsReady=false` in preview mode. Its hostname is allowed by Turnstile, and administrator/Turnstile secrets are installed. No Stripe key is installed there.
+
+All **41 remote staging HTTP assertions passed** using synthetic staging-only fixtures: one-time token verification and reuse rejection, secure cookie/session handling, posting, applying, ownership checks, reports, withdrawal and cancellation. Paid, hiring and work routes returned 503; hostile-origin requests returned 403. No financial intents were created, and no emails were sent to the synthetic addresses. These checks exercise the deployed application endpoints without claiming real email sign-in or production account acceptance.
+
+Scoped cleanup was verified with zero remaining fixture users, authentication tokens, sessions, jobs, milestones, applications, reports, messages, reviews and audit rows. Exact per-user rate-limit keys were removed; the shared IP verification bucket was left to expire normally rather than deleting other callers' rate-limit state. No financial intents were present. The private staging acceptance report is retained outside tracked files.
+
+Formatting checks and a scan of 27 changed files for the known private Stripe credential and common credential patterns passed. Credentials and private fixture evidence remain outside tracked files.
+
+Direct deployment and canonical-host observations are established above. GitHub CI is tracked separately in the repository's [Actions workflow](https://github.com/defcron/saladfinder/actions/workflows/ci.yml); direct deployment does not imply CI success. Local suites, deployed configuration and email delivery do not establish Stripe Connect or bank-payout acceptance; provider evidence is independently recorded in the next section.
+
+## Actual Stripe sandbox probe — 2026-11-04
+
+The official Stripe CLI created an isolated, unclaimed temporary sandbox. The probe used `stripe@23.1.0` with API version `2026-10-28.endive`; every accepted object was test mode. The sandbox expires after seven days. No account claim, agreement acceptance or live-money action was performed.
+
+| Provider operation                          | Observed result                                              | What it establishes                                                                              |
+| ------------------------------------------- | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------ |
+| Accounts v2 Canadian recipient creation     | Rejected with HTTP 403: credential lacked Accounts v2 access | Connect access is blocked; recipient payload validation and account creation are not established |
+| Platform hosted Checkout creation           | Accepted CAD 2,900 cents; session open and unpaid            | Basic Checkout request accepted by Stripe, with card and Link selected dynamically               |
+| Same Checkout idempotency key and request   | Returned the same session                                    | Provider idempotent replay for that request                                                      |
+| Checkout retrieval and expiry               | Retrieved, then expired while unpaid                         | Basic object read and cleanup accepted                                                           |
+| Platform snapshot webhook endpoint creation | Accepted and issued a signing secret                         | Endpoint configuration accepted; reserved `.invalid` target means no delivery was tested         |
+| Webhook disable and delete                  | Both accepted                                                | Temporary endpoint cleaned up                                                                    |
+
+No connected account was created. The Checkout probe did not include an application fee or destination transfer, and no payment was confirmed. No charge, refund, dispute, payout or bank receipt was tested. The temporary endpoint was disabled and deleted; the only retained Checkout session is expired and unpaid. The local redacted evidence is `.local/stripe-provider-acceptance.json`, excluded from the public repository. Keys, signing secrets, claim links, account identifiers and private identity information are not published.
+
+A managed or claimed Canadian sandbox with Connect access is still required for hosted onboarding, destination-charge and payout acceptance. Provider-fixture tests and basic platform Checkout acceptance cannot substitute for those checks. See [STRIPE.md](STRIPE.md).
+
+## Cloudflare DNS and email activation — 2026-11-04 (historical checkpoint)
 
 - The operator explicitly authorized Cloudflare nameservers for `saladfinder.com`. Netfirms remains the registrar. Its saved nameservers, the `.com` registry and both Cloudflare authoritative servers confirm `maciej.ns.cloudflare.com` and `rihana.ns.cloudflare.com`. Recursive caches still returned mixed old and new answers; global cache expiry is not claimed.
 - Preserved the `kycaml` Google service CNAME, Google verification, original apex/FTP hosting and existing ACME delegation. Replaced the suspended Netfirms mail configuration with Cloudflare receiving MX, SPF and provider-generated DKIM. The apex still points to its original hosting; no new apex redirect was configured.
@@ -17,7 +65,7 @@ Verified on **2026-11-04**. This record distinguishes local regression tests, de
 - Native Chrome visual inspection confirmed the enabled sign-in form, correct support link and an automatically successful Turnstile widget on `www`. No account details or consent were submitted. A real app-generated sign-in email, successful first use and token reuse rejection remain pending production acceptance; local tests cover the authentication behavior.
 - The Pages custom domain and its Google-issued certificate are active. A separate Cloudflare Universal SSL Let's Encrypt apex/wildcard certificate remains pending validation. These are distinct certificate paths.
 
-The changed configuration and deployment health-check URL are published with this record. Direct deployment, the local suites and live observations are established above; GitHub CI for the resulting commit must be checked separately.
+This checkpoint records direct deployment, local suites and live observations. GitHub CI history is tracked separately in the repository's Actions workflow linked above; deployment alone does not establish CI success.
 
 ## Initial implementation verification (historical)
 
@@ -82,14 +130,14 @@ Built-in browser use was unavailable: Work settings disabled local browser acces
 
 Inspected comparison points: headline/navigation/CTA copy; two-column filter/list structure; serif heading and sans-serif control hierarchy; ivory/forest/lime palette; divider-based listing rows and price alignment; spacing and borders; native vector mark/icons; mobile stacking and no horizontal overflow. The fieldset legend overlap, desktop sidebar/price-column alignment, header height and example milestone count were repaired. Above-the-fold copy matches the concept; a functional payout-explanation link and responsive navigation are intentional extensions. No known material clipping or layout defect remains in the checked views.
 
-## Not yet verified or enabled
+## Remaining acceptance
 
-- No actual Stripe sandbox account, hosted onboarding, test charge/refund, Connect approval, live charge or bank payout. Provider fixtures cannot establish these.
-- Production app-generated sign-in delivery and first-use/reuse acceptance remain pending. The sending domain, provider delivery and inbound forwarding are now verified as recorded above.
+- No successful Stripe Accounts v2 recipient creation, hosted onboarding, destination charge, application fee, test charge/refund, Connect approval, live charge or bank payout. The actual temporary sandbox probe established only the limited platform operations recorded above.
+- The application's actual email function has passed native-binding delivery through an isolated fixed-recipient Worker. Production sign-in form submission, first-use/reuse token acceptance and authenticated posting/applying remain pending; they were not exercised by that delivery check. Local regression/browser tests and the 41 staging HTTP assertions cover those application flows separately.
 - No business registration, name/trademark clearance, approved legal/tax/insurance decision, CRA reporting implementation, staffed support contact, or final transaction policies.
-- The apex still uses its original hosting and needs verified HTTPS forwarding. The `www` Pages gateway, canonical app URL and Cloudflare DNS delegation are active.
+- The apex has verified HTTPS forwarding to the active canonical `www` hostname. The latest application release is deployed as recorded above.
 - No Cloudflare deployment token installed in GitHub. The app was deployed through the owner's existing local Wrangler authorization; the included manual GitHub deploy workflow requires a separate scoped token.
 - No full browser matrix, screen-reader audit, sustained load test, penetration test, independent bank-receipt evidence, automated dispute-evidence submission, or external on-call alerting service.
 - No revenue, user demand or profitability has been demonstrated.
 
-Complete [LAUNCH.md](LAUNCH.md) before enabling paid bookings. Source publication and a working preview are concrete deliverables, not a claim that the regulated/provider-dependent business launch is complete.
+Complete the paid-launch requirements in [LAUNCH.md](LAUNCH.md) before enabling paid bookings. Source publication, a working preview and a listings pilot do not establish payment-provider approval, bank arrival or a commercially operating marketplace.

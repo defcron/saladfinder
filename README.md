@@ -1,22 +1,24 @@
 # SaladFinder
 
-**Website and email deployment:** the canonical preview is now `www.saladfinder.com`, using the operator-authorized Cloudflare DNS setup. Forwarding and provider sending passed actual delivery checks, and the app's restricted email binding is deployed. Production app-generated sign-in acceptance remains pending. See [the current checkpoint](docs/PAUSED.md).
+**Current checkpoint:** the canonical preview and email binding are deployed at `www.saladfinder.com`, and the apex now redirects there with verified HTTPS. The real posting-and-application pilot is deployed. Hiring, work and money movement remain disabled; native email-code delivery is verified, while the complete production account sign-in cycle remains unverified. See [the current checkpoint](docs/PAUSED.md).
 
-An Ontario/CAD local-services marketplace built with React, Cloudflare Workers, D1 and Stripe Connect. Customers post jobs, workers apply, and both parties agree on milestones. Customers pay approved milestones through Stripe Checkout; eligible workers can request an Instant Payout. Standard bank payouts remain available according to Stripe's actual timing.
+An Ontario/CAD local-services marketplace built with React, Cloudflare Workers, D1 and Stripe Connect. Its implemented workflow covers job listings, applications and agreed milestones. Once the paid-launch requirements are met, customers can pay approved milestones through Stripe Checkout and eligible workers can request Instant Payouts or choose standard bank payouts, subject to Stripe's actual timing.
 
-**Launch status: public preview.** Real-money transactions are disabled. A Canadian Stripe Connect account, app sign-in email acceptance, reviewed operator details/policies and payment-provider acceptance are required before paid launch. This repository is not evidence that those external steps are complete. See [launch runbook](docs/LAUNCH.md) and [verification record](docs/VERIFICATION.md).
+**Launch status: public preview.** Real-money transactions are disabled. Stripe owner verification, full Connect/payment-provider acceptance, complete production account sign-in acceptance and reviewed operator details/policies are required before paid launch. This repository is not evidence that those external steps are complete. See [launch runbook](docs/LAUNCH.md) and [verification record](docs/VERIFICATION.md).
 
 - App: https://www.saladfinder.com
-- Previous Workers and Pages page URLs redirect to the canonical `www` hostname. The apex retains its original hosting record; apex forwarding remains pending ([domain status](docs/DOMAIN.md)).
+- Apex HTTP/HTTPS and previous Workers/Pages page URLs redirect to the canonical `www` hostname, preserving paths and queries ([domain status](docs/DOMAIN.md)).
 - Source: https://github.com/defcron/saladfinder
 - License: [MIT](LICENSE)
+
+The deployed listing pilot uses `LISTINGS_ENABLED=true` with `LAUNCH_MODE=preview`: real posting, applications, withdrawal, open-listing cancellation and reporting are enabled; hiring, starting/submitting work and all money actions remain blocked. The listing gate does not override the paid-launch requirements.
 
 ## Included
 
 - Responsive job search with category, city and payment-schedule filters. Preview examples are visibly labelled and never inserted as real jobs.
-- Verified email magic-link accounts with Cloudflare Email Sending or Resend, profiles, session revocation and data export. Cloudflare provider sending and forwarding are verified, and the restricted app email binding is deployed; production app-generated sign-in acceptance remains pending. See [email operations](docs/EMAIL.md).
+- Verified email magic-link accounts with Cloudflare Email Sending or Resend, profiles, session revocation and data export. Cloudflare provider sending and forwarding are verified, and the restricted app email binding is deployed; the native email function has passed provider and inbox checks, while the full account sign-in cycle remains unverified. See [email operations](docs/EMAIL.md).
 - Job creation with a server-calculated milestone budget and fee disclosure; applications, single-worker hiring, private job messages, submissions, approvals, reports and reviews.
-- Stripe Accounts v2 hosted onboarding, hosted Checkout destination charges, balances and eligible payout requests; durable operation records and signed, replay-safe webhook reconciliation.
+- Stripe Accounts v2 hosted onboarding, hosted Checkout destination charges, balances and eligible payout requests; durable operation records and signed, replay-safe webhook reconciliation. Instant is the initial eligible payout choice, with an explicit standard-bank alternative and no automatic payout. Ambiguous requests retain the same operation reference across reloads.
 - Administrator reports, suspension, payment incidents and full refunds.
 - Early access registration with Turnstile and consent records.
 - D1 migrations, security headers, CSRF protection, rate limits, server authorization, audit records, bounded API results, expired-session cleanup, CI and browser tests.
@@ -39,7 +41,7 @@ Open `http://127.0.0.1:8787`. For UI hot reload run `npm run dev` separately. AP
 
 Local auth deliberately returns a single-use `devToken` only when `APP_ENV=local` **and** the request hostname is loopback. The UI shows a local-development sign-in action. This is not available on production/staging hosts. Use addresses under `example.test` locally; no external mail is sent. Local marketplace workflows can run without Stripe, but money never becomes “paid” without payment evidence. The default production configuration keeps transactions disabled.
 
-For Stripe sandbox testing, follow [Stripe integration](docs/STRIPE.md). Set secrets in a gitignored `.dev.vars.local`; never commit a key. Local examples and automated provider fixtures are not Stripe sandbox acceptance.
+For Stripe sandbox testing, follow [Stripe integration](docs/STRIPE.md). Set secrets in a gitignored `.dev.vars.local`; never commit a key. Sandbox CAD Checkout create/replay/retrieve/expire and webhook endpoint creation have been accepted; Accounts v2 Connect was blocked by restricted-key permissions. Successful onboarding, actual webhook delivery, charges and payouts remain unaccepted. Local examples and automated provider fixtures do not establish those results.
 
 ```bash
 npm run typecheck

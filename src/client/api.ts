@@ -14,6 +14,7 @@ export type User = {
 };
 export type Config = {
   launchMode: "preview" | "live";
+  listingsReady: boolean;
   currency: string;
   region: string;
   authReady: boolean;
@@ -73,6 +74,7 @@ export type Message = {
 };
 export type Review = {
   id: string;
+  author_id: string;
   author_name?: string;
   rating: number;
   body: string;
@@ -88,9 +90,11 @@ export type JobDetail = {
 };
 export class ApiError extends Error {
   status: number;
-  constructor(message: string, status: number) {
+  details: unknown;
+  constructor(message: string, status: number, details?: unknown) {
     super(message);
     this.status = status;
+    this.details = details;
   }
 }
 export async function api<T>(
@@ -114,9 +118,32 @@ export async function api<T>(
       typeof data.error === "string"
         ? data.error
         : "Something went wrong. Please try again.";
-    throw new ApiError(message, response.status);
+    throw new ApiError(message, response.status, data);
   }
+  if (data === null)
+    throw new ApiError(
+      "The server returned an unreadable response. Check the current status before retrying.",
+      response.status,
+    );
   return data as T;
+}
+export function safeInternalPath(
+  value: string | null,
+  fallback = "/dashboard",
+) {
+  if (!value?.startsWith("/") || /[\\\u0000-\u0020]/.test(value))
+    return fallback;
+  try {
+    const target = new URL(value, "https://saladfinder.invalid");
+    if (
+      target.origin !== "https://saladfinder.invalid" ||
+      ["/sign-in", "/auth/verify"].includes(target.pathname)
+    )
+      return fallback;
+    return `${target.pathname}${target.search}${target.hash}`;
+  } catch {
+    return fallback;
+  }
 }
 export const post = <T>(path: string, data: unknown = {}) =>
   api<T>(path, { method: "POST", body: JSON.stringify(data) });

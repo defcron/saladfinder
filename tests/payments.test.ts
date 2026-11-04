@@ -68,10 +68,44 @@ function fakeStripe() {
       createLoginLink: vi.fn(async () => ({
         url: "https://connect.stripe.com/fixture-dashboard",
       })),
+      listExternalAccounts: vi.fn(async () => ({
+        data: [
+          {
+            id: "card_eligible",
+            object: "card",
+            currency: "cad",
+            available_payout_methods: ["instant", "standard"],
+            default_for_currency: true,
+          },
+          {
+            id: "ba_standard",
+            object: "bank_account",
+            currency: "cad",
+            status: "new",
+            available_payout_methods: ["standard"],
+            default_for_currency: false,
+          },
+        ] as Stripe.ExternalAccount[],
+        has_more: false,
+      })),
     },
     v2: {
       core: {
         accounts: {
+          retrieve: vi.fn(async () => ({
+            id: "acct_worker",
+            identity: { country: "ca" },
+            configuration: {
+              recipient: {
+                capabilities: {
+                  stripe_balance: {
+                    stripe_transfers: { status: "active" },
+                    payouts: { status: "active" },
+                  },
+                },
+              },
+            },
+          })),
           create: vi.fn(
             async (_params: unknown, options: { idempotencyKey: string }) => {
               if (!accounts.has(options.idempotencyKey))
@@ -99,6 +133,14 @@ function fakeStripe() {
           },
         ],
         livemode: false,
+      })),
+    },
+    balanceSettings: {
+      retrieve: vi.fn(async () => ({
+        payments: { payouts: { schedule: { interval: "manual" } } },
+      })),
+      update: vi.fn(async (_params: unknown, _options: unknown) => ({
+        payments: { payouts: { schedule: { interval: "manual" } } },
       })),
     },
     checkout: {
@@ -172,6 +214,7 @@ function fakeStripe() {
               amount: params.amount,
               currency: "cad",
               method: params.method,
+              destination: params.destination ?? "ba_standard",
               status: "pending",
               arrival_date: Math.floor(Date.now() / 1000) + 86400,
               created: Math.floor(Date.now() / 1000),
@@ -404,13 +447,19 @@ describe("payment ownership, ledger and Stripe event reconciliation", () => {
     await env.DB.prepare("UPDATE milestones SET status = 'submitted'").run();
     expect((await request("/milestones/milestone/checkout")).status).toBe(409);
     await env.DB.prepare("UPDATE milestones SET status = 'approved'").run();
-    fixture.stripe.accounts.retrieve.mockResolvedValue({
+    fixture.stripe.v2.core.accounts.retrieve.mockResolvedValue({
       id: "acct_worker",
-      country: "CA",
-      capabilities: { transfers: "active" },
-      payouts_enabled: false,
-      charges_enabled: false,
-      details_submitted: true,
+      identity: { country: "ca" },
+      configuration: {
+        recipient: {
+          capabilities: {
+            stripe_balance: {
+              stripe_transfers: { status: "active" },
+              payouts: { status: "restricted" },
+            },
+          },
+        },
+      },
     });
     expect((await request("/milestones/milestone/checkout")).status).toBe(409);
   });
@@ -735,7 +784,7 @@ describe("payment ownership, ledger and Stripe event reconciliation", () => {
       requestId: crypto.randomUUID(),
     };
     expect((await request("/payments/payout", "worker", input)).status).toBe(
-      500,
+      503,
     );
     expect(
       (
@@ -875,9 +924,22 @@ describe("payment ownership, ledger and Stripe event reconciliation", () => {
     }
   });
 
-  it("requires a worker role for onboarding and an account for dashboard access", async () => {
-    expect((await request("/payments/onboard", "poster")).status).toBe(403);
+  it("allows members who chose posting to onboard for work and requires their own account for dashboard access", async () => {
     expect((await request("/payments/dashboard", "poster")).status).toBe(409);
+    fixture.stripe.v2.core.accounts.create.mockResolvedValueOnce({
+      id: "acct_poster",
+    });
+    expect((await request("/payments/onboard", "poster")).status).toBe(200);
+    expect(
+      fixture.stripe.v2.core.accounts.create.mock.calls[0]![0],
+    ).toMatchObject({ contact_email: poster.email });
+    expect(fixture.stripe.balanceSettings.update).toHaveBeenCalledWith(
+      { payments: { payouts: { schedule: { interval: "manual" } } } },
+      {
+        stripeAccount: "acct_poster",
+        idempotencyKey: expect.stringMatching(/^manual-payouts-acct_poster-/),
+      },
+    );
     expect((await request("/payments/dashboard", "worker")).status).toBe(200);
   });
 
@@ -885,6 +947,8 @@ describe("payment ownership, ledger and Stripe event reconciliation", () => {
     env.APP_ENV = "staging";
     env.STRIPE_SECRET_KEY = "sk_live_fixture";
     expect((await request("/payments/dashboard", "worker")).status).toBe(503);
+    env.STRIPE_SECRET_KEY = "rkcs_test_fixture";
+    expect((await request("/payments/dashboard", "worker")).status).toBe(200);
     env.APP_ENV = "local";
     env.STRIPE_SECRET_KEY = "sk_test_fixture";
     expect(
@@ -931,6 +995,639 @@ describe("payment ownership, ledger and Stripe event reconciliation", () => {
       refunds: [],
     });
   });
+
+  it("prefers eligible instant payouts and explicitly routes standard payouts to a bank rather than the default card", async () => {
+    const status = await (
+      await request("/payments/status", "worker", {}, "GET")
+    ).json();
+    expect(status).toMatchObject({
+      accountId: "acct_worker",
+      defaultPayoutMethod: "instant",
+      instantEligible: true,
+      standardEligible: true,
+      payoutSchedule: "manual",
+      payoutSetupRequired: false,
+      pendingPayout: null,
+    });
+    expect(status).toMatchObject({
+      payoutLimits: {
+        instant: {
+          minimum_cents: 60,
+          maximum_cents: 999900,
+        },
+      },
+    });
+    const response = await request("/payments/payout", "worker", {
+      method: "standard",
+      amount_cents: 1000,
+      requestId: crypto.randomUUID(),
+    });
+    expect(response.status).toBe(200);
+    expect(fixture.stripe.payouts.create.mock.calls[0]![0]).toMatchObject({
+      method: "standard",
+      destination: "ba_standard",
+      amount: 1000,
+    });
+    expect(fixture.stripe.accounts.retrieve).not.toHaveBeenCalled();
+    expect(fixture.stripe.v2.core.accounts.retrieve.mock.calls[0]).toEqual([
+      "acct_worker",
+      { include: ["configuration.recipient", "identity", "requirements"] },
+    ]);
+  });
+
+  it("cross-checks instant net balances against eligible CAD debit-card destinations and never sums destinations", async () => {
+    fixture.stripe.balance.retrieve.mockResolvedValue({
+      available: [{ currency: "cad", amount: 100000 }],
+      pending: [],
+      livemode: false,
+      instant_available: [
+        {
+          currency: "cad",
+          amount: 100000,
+          net_available: [
+            { destination: "card_eligible", amount: 750 },
+            { destination: "ba_standard", amount: 90000 },
+            { destination: "card_missing", amount: 99000 },
+          ],
+        },
+      ],
+    });
+    const status = await (
+      await request("/payments/status", "worker", {}, "GET")
+    ).json();
+    expect(status).toMatchObject({ balance: { instant_available_cents: 750 } });
+    const response = await request("/payments/payout", "worker", {
+      method: "instant",
+      amount_cents: 751,
+      requestId: crypto.randomUUID(),
+    });
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({
+      payoutRequest: { state: "rejected", safeToRetryNew: true },
+    });
+    expect(fixture.stripe.payouts.create).not.toHaveBeenCalled();
+    fixture.stripe.accounts.listExternalAccounts.mockResolvedValue({
+      data: [
+        {
+          id: "ba_standard",
+          object: "bank_account",
+          currency: "cad",
+          status: "new",
+          available_payout_methods: ["standard"],
+        },
+      ] as Stripe.ExternalAccount[],
+      has_more: false,
+    });
+    expect(
+      await (await request("/payments/status", "worker", {}, "GET")).json(),
+    ).toMatchObject({
+      instantEligible: false,
+      standardEligible: true,
+      defaultPayoutMethod: "standard",
+      balance: { instant_available_cents: 0 },
+    });
+  });
+
+  it("does not substitute a card, foreign-currency bank or errored bank for a standard bank payout", async () => {
+    fixture.stripe.accounts.listExternalAccounts.mockResolvedValue({
+      data: [
+        {
+          id: "card_eligible",
+          object: "card",
+          currency: "cad",
+          available_payout_methods: ["instant", "standard"],
+        },
+        {
+          id: "ba_usd",
+          object: "bank_account",
+          currency: "usd",
+          status: "new",
+          available_payout_methods: ["standard"],
+        },
+        {
+          id: "ba_error",
+          object: "bank_account",
+          currency: "cad",
+          status: "errored",
+          available_payout_methods: ["standard"],
+        },
+      ] as Stripe.ExternalAccount[],
+      has_more: false,
+    });
+    expect(
+      await (await request("/payments/status", "worker", {}, "GET")).json(),
+    ).toMatchObject({ standardEligible: false });
+    expect(
+      (
+        await request("/payments/payout", "worker", {
+          method: "standard",
+          amount_cents: 1000,
+          requestId: crypto.randomUUID(),
+        })
+      ).status,
+    ).toBe(409);
+    expect(fixture.stripe.payouts.create).not.toHaveBeenCalled();
+  });
+
+  it("fails closed when external account pagination is incomplete", async () => {
+    fixture.stripe.accounts.listExternalAccounts.mockResolvedValue({
+      data: [],
+      has_more: true,
+    });
+    expect(
+      (
+        await request("/payments/payout", "worker", {
+          method: "instant",
+          amount_cents: 1000,
+          requestId: crypto.randomUUID(),
+        })
+      ).status,
+    ).toBe(409);
+    expect(fixture.stripe.payouts.create).not.toHaveBeenCalled();
+  });
+
+  it.each(["stripe_transfers", "payouts"] as const)(
+    "requires active v2 %s capability even when legacy flags say ready",
+    async (capability) => {
+      const account = await fixture.stripe.v2.core.accounts.retrieve();
+      account.configuration.recipient.capabilities.stripe_balance[
+        capability
+      ].status = "restricted";
+      fixture.stripe.v2.core.accounts.retrieve.mockResolvedValue(account);
+      expect(
+        await (await request("/payments/status", "worker", {}, "GET")).json(),
+      ).toMatchObject({
+        accountReady: false,
+        instantEligible: false,
+        standardEligible: false,
+        defaultPayoutMethod: null,
+      });
+      expect(
+        (
+          await request("/payments/payout", "worker", {
+            method: "standard",
+            amount_cents: 1000,
+            requestId: crypto.randomUUID(),
+          })
+        ).status,
+      ).toBe(409);
+      expect((await request("/milestones/milestone/checkout")).status).toBe(
+        409,
+      );
+      expect(fixture.stripe.payouts.create).not.toHaveBeenCalled();
+    },
+  );
+
+  it("keeps status read-only and requires explicit setup before manual standard withdrawals", async () => {
+    fixture.stripe.balanceSettings.retrieve.mockResolvedValue({
+      payments: { payouts: { schedule: { interval: "daily" } } },
+    });
+    expect(
+      await (await request("/payments/status", "worker", {}, "GET")).json(),
+    ).toMatchObject({
+      payoutSchedule: "daily",
+      payoutSetupRequired: true,
+      standardEligible: false,
+    });
+    expect(fixture.stripe.balanceSettings.update).not.toHaveBeenCalled();
+    expect(
+      (
+        await request("/payments/payout", "worker", {
+          method: "standard",
+          amount_cents: 1000,
+          requestId: crypto.randomUUID(),
+        })
+      ).status,
+    ).toBe(409);
+    expect((await request("/payments/onboard", "worker")).status).toBe(200);
+    expect((await request("/payments/onboard", "worker")).status).toBe(200);
+    const calls = fixture.stripe.balanceSettings.update.mock.calls;
+    expect(calls).toHaveLength(2);
+    expect(calls[0]![0]).toEqual({
+      payments: { payouts: { schedule: { interval: "manual" } } },
+    });
+    expect(calls[1]![1]).not.toEqual(calls[0]![1]);
+  });
+
+  it("recovers an unresolved payout across page reloads and refuses expired idempotency retries", async () => {
+    fixture.stripe.payouts.create.mockRejectedValueOnce(new Error("timeout"));
+    const input = {
+      method: "instant",
+      amount_cents: 1000,
+      requestId: crypto.randomUUID(),
+    };
+    const response = await request("/payments/payout", "worker", input);
+    expect(response.status).toBe(503);
+    expect(await response.json()).toMatchObject({
+      payoutRequest: {
+        state: "unresolved",
+        requestId: input.requestId,
+        safeToRetryNew: false,
+        retryable: true,
+      },
+    });
+    expect(
+      await (await request("/payments/status", "worker", {}, "GET")).json(),
+    ).toMatchObject({ pendingPayout: { ...input, retryable: true } });
+    expect(
+      await (await request("/payments/status", "poster", {}, "GET")).json(),
+    ).toMatchObject({ pendingPayout: null });
+    await env.DB.prepare("UPDATE payout_intents SET created_at = ?")
+      .bind(new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString())
+      .run();
+    expect(
+      await (await request("/payments/status", "worker", {}, "GET")).json(),
+    ).toMatchObject({ pendingPayout: { retryable: false } });
+    const expired = await request("/payments/payout", "worker", input);
+    expect(expired.status).toBe(409);
+    expect(await expired.json()).toMatchObject({
+      payoutRequest: {
+        state: "unresolved",
+        safeToRetryNew: false,
+        retryable: false,
+        reconciliationRequired: true,
+      },
+    });
+    expect(fixture.stripe.payouts.create).toHaveBeenCalledTimes(1);
+  });
+
+  it("allows a new standard request only after a definitive first-attempt instant refusal", async () => {
+    fixture.stripe.payouts.create.mockRejectedValueOnce(
+      new Stripe.errors.StripeInvalidRequestError({
+        message: "Limit exceeded",
+        statusCode: 400,
+        code: "instant_payouts_limit_exceeded",
+      }),
+    );
+    const input = {
+      method: "instant",
+      amount_cents: 1000,
+      requestId: crypto.randomUUID(),
+    };
+    const refused = await request("/payments/payout", "worker", input);
+    expect(refused.status).toBe(409);
+    expect(await refused.json()).toMatchObject({
+      payoutRequest: { state: "rejected", safeToRetryNew: true },
+    });
+    expect((await row("SELECT status FROM payout_intents"))!.status).toBe(
+      "rejected",
+    );
+    expect((await request("/payments/payout", "worker", input)).status).toBe(
+      409,
+    );
+    expect(fixture.stripe.payouts.create).toHaveBeenCalledTimes(1);
+    expect(
+      (
+        await request("/payments/payout", "worker", {
+          ...input,
+          method: "standard",
+          requestId: crypto.randomUUID(),
+        })
+      ).status,
+    ).toBe(200);
+    expect(fixture.payouts.size).toBe(1);
+    expect(fixture.stripe.payouts.create.mock.calls[1]![0]).toMatchObject({
+      method: "standard",
+      destination: "ba_standard",
+    });
+  });
+
+  it("preserves an ambiguous original request even if a later retry returns a known 400 refusal", async () => {
+    fixture.stripe.payouts.create.mockRejectedValueOnce(new Error("timeout"));
+    fixture.stripe.payouts.create.mockRejectedValueOnce(
+      new Stripe.errors.StripeInvalidRequestError({
+        message: "Unavailable",
+        statusCode: 400,
+        code: "balance_insufficient",
+      }),
+    );
+    const input = {
+      method: "instant",
+      amount_cents: 1000,
+      requestId: crypto.randomUUID(),
+    };
+    await request("/payments/payout", "worker", input);
+    const retried = await request("/payments/payout", "worker", input);
+    expect(await retried.json()).toMatchObject({
+      payoutRequest: { state: "unresolved", safeToRetryNew: false },
+    });
+    expect((await row("SELECT status FROM payout_intents"))!.status).toBe(
+      "creating",
+    );
+    expect(
+      (
+        await request("/payments/payout", "worker", {
+          ...input,
+          method: "standard",
+          requestId: crypto.randomUUID(),
+        })
+      ).status,
+    ).toBe(409);
+    expect(fixture.stripe.payouts.create).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not unlock a new UUID when a concurrent request already created the payout", async () => {
+    let releaseBalance!: (
+      balance: Awaited<ReturnType<typeof fixture.stripe.balance.retrieve>>,
+    ) => void;
+    let enteredBalance!: () => void;
+    const entered = new Promise<void>((resolve) => {
+      enteredBalance = resolve;
+    });
+    const delayed = new Promise<
+      Awaited<ReturnType<typeof fixture.stripe.balance.retrieve>>
+    >((resolve) => {
+      releaseBalance = resolve;
+    });
+    fixture.stripe.balance.retrieve.mockImplementationOnce(() => {
+      enteredBalance();
+      return delayed;
+    });
+    const input = {
+      method: "standard",
+      amount_cents: 1000,
+      requestId: crypto.randomUUID(),
+    };
+    const slower = request("/payments/payout", "worker", input);
+    await entered;
+    expect((await request("/payments/payout", "worker", input)).status).toBe(
+      200,
+    );
+    releaseBalance({
+      available: [],
+      pending: [],
+      instant_available: [],
+      livemode: false,
+    });
+    const stale = await slower;
+    expect(stale.status).toBe(409);
+    expect(await stale.json()).toMatchObject({
+      payoutRequest: { state: "confirmed", safeToRetryNew: false },
+    });
+    expect(fixture.payouts.size).toBe(1);
+    expect((await row("SELECT status FROM payout_intents"))!.status).toBe(
+      "pending",
+    );
+  });
+
+  it("prevents a delayed concurrent submission after its UUID was durably rejected by preflight", async () => {
+    const goodBalance = await fixture.stripe.balance.retrieve();
+    let releaseBalance!: (balance: typeof goodBalance) => void;
+    let enteredBalance!: () => void;
+    const entered = new Promise<void>((resolve) => {
+      enteredBalance = resolve;
+    });
+    const delayed = new Promise<typeof goodBalance>((resolve) => {
+      releaseBalance = resolve;
+    });
+    fixture.stripe.balance.retrieve.mockImplementationOnce(() => {
+      enteredBalance();
+      return delayed;
+    });
+    fixture.stripe.balance.retrieve.mockResolvedValueOnce({
+      available: [],
+      pending: [],
+      instant_available: [],
+      livemode: false,
+    });
+    const input = {
+      method: "standard",
+      amount_cents: 1000,
+      requestId: crypto.randomUUID(),
+    };
+    const slower = request("/payments/payout", "worker", input);
+    await entered;
+    const rejected = await request("/payments/payout", "worker", input);
+    expect(await rejected.json()).toMatchObject({
+      payoutRequest: { state: "rejected", safeToRetryNew: true },
+    });
+    releaseBalance(goodBalance);
+    expect((await slower).status).toBe(409);
+    expect(fixture.stripe.payouts.create).not.toHaveBeenCalled();
+    expect((await row("SELECT status FROM payout_intents"))!.status).toBe(
+      "rejected",
+    );
+  });
+
+  it("reuses the exact provider request after Stripe acceptance but before the local receipt was saved", async () => {
+    const originalDb = env.DB;
+    let failReceipt = true;
+    env.DB = new Proxy(originalDb, {
+      get(target, property) {
+        if (property === "prepare")
+          return (sql: string) => {
+            const statement = target.prepare(sql);
+            if (
+              sql.startsWith("UPDATE payout_intents SET payout_id =") &&
+              failReceipt
+            ) {
+              failReceipt = false;
+              return {
+                bind: () => ({
+                  run: async () => {
+                    throw new Error("D1 receipt unavailable");
+                  },
+                }),
+              } as unknown as D1PreparedStatement;
+            }
+            return statement;
+          };
+        const value = Reflect.get(target, property);
+        return typeof value === "function" ? value.bind(target) : value;
+      },
+    });
+    const input = {
+      method: "instant",
+      amount_cents: 1000,
+      requestId: crypto.randomUUID(),
+    };
+    try {
+      const interrupted = await request("/payments/payout", "worker", input);
+      expect(interrupted.status).toBe(503);
+      expect(await interrupted.json()).toMatchObject({
+        payoutRequest: { state: "unresolved", safeToRetryNew: false },
+      });
+      expect(fixture.payouts.size).toBe(1);
+      expect(
+        await row("SELECT payout_id,status FROM payout_intents"),
+      ).toMatchObject({ payout_id: null, status: "creating" });
+      fixture.stripe.accounts.listExternalAccounts.mockResolvedValue({
+        data: [],
+        has_more: false,
+      });
+      fixture.stripe.balance.retrieve.mockResolvedValue({
+        available: [],
+        pending: [],
+        instant_available: [],
+        livemode: false,
+      });
+      expect((await request("/payments/payout", "worker", input)).status).toBe(
+        200,
+      );
+      expect(fixture.payouts.size).toBe(1);
+      expect(fixture.stripe.payouts.create.mock.calls[1]).toEqual(
+        fixture.stripe.payouts.create.mock.calls[0],
+      );
+      expect((await row("SELECT status FROM payout_intents"))!.status).toBe(
+        "pending",
+      );
+    } finally {
+      env.DB = originalDb;
+    }
+  });
+
+  it("does not declare an existing payout reference unused when its database lookup fails", async () => {
+    const input = {
+      method: "standard",
+      amount_cents: 1000,
+      requestId: crypto.randomUUID(),
+    };
+    await request("/payments/payout", "worker", input);
+    const originalDb = env.DB;
+    env.DB = new Proxy(originalDb, {
+      get(target, property) {
+        if (property === "prepare")
+          return (sql: string) => {
+            if (sql === "SELECT * FROM payout_intents WHERE request_id = ?")
+              throw new Error("D1 lookup unavailable");
+            return target.prepare(sql);
+          };
+        const value = Reflect.get(target, property);
+        return typeof value === "function" ? value.bind(target) : value;
+      },
+    });
+    try {
+      const response = await request("/payments/payout", "worker", input);
+      expect(response.status).toBe(503);
+      expect(await response.json()).toMatchObject({
+        payoutRequest: {
+          state: "unknown",
+          requestId: input.requestId,
+          safeToRetryNew: false,
+        },
+      });
+      expect(fixture.payouts.size).toBe(1);
+    } finally {
+      env.DB = originalDb;
+    }
+  });
+
+  it.each(["rate limit", "disabled config"])(
+    "never claims a retry UUID is unused when %s stops its lookup",
+    async (condition) => {
+      const input = {
+        method: "standard",
+        amount_cents: 1000,
+        requestId: crypto.randomUUID(),
+      };
+      expect((await request("/payments/payout", "worker", input)).status).toBe(
+        200,
+      );
+      if (condition === "rate limit")
+        await env.DB.prepare(
+          "UPDATE rate_limits SET count = 20 WHERE key LIKE 'payout:%'",
+        ).run();
+      else env.LAUNCH_MODE = "preview";
+      const retry = await request("/payments/payout", "worker", input);
+      expect(retry.status).toBe(condition === "rate limit" ? 429 : 503);
+      expect(await retry.json()).toMatchObject({
+        payoutRequest: { state: "unknown", safeToRetryNew: false },
+      });
+      expect(fixture.payouts.size).toBe(1);
+    },
+  );
+
+  it("keeps completed payout references private across accounts and denies suspended members", async () => {
+    const input = {
+      method: "standard",
+      amount_cents: 1000,
+      requestId: crypto.randomUUID(),
+    };
+    await request("/payments/payout", "worker", input);
+    const previous = poster.stripe_account_id;
+    poster.stripe_account_id = "acct_poster";
+    try {
+      expect((await request("/payments/payout", "poster", input)).status).toBe(
+        409,
+      );
+      expect(fixture.stripe.payouts.retrieve).not.toHaveBeenCalled();
+    } finally {
+      poster.stripe_account_id = previous;
+    }
+    worker.suspended_at = new Date().toISOString();
+    try {
+      expect((await request("/payments/payout", "worker", input)).status).toBe(
+        403,
+      );
+    } finally {
+      worker.suspended_at = null;
+    }
+  });
+
+  it.each(["disputed", "pending", "failed"])(
+    "keeps financial %s holds even if a job status is restored",
+    async (hold) => {
+      await checkout();
+      const payment = (await row<{ id: string }>(
+        "SELECT id FROM payment_attempts",
+      ))!;
+      if (hold === "disputed")
+        await env.DB.prepare(
+          "UPDATE payment_attempts SET status = 'disputed'",
+        ).run();
+      else
+        await env.DB.prepare(
+          "INSERT INTO refund_intents (payment_attempt_id,operation_id,requested_by,reason,status,amount_cents) VALUES (?,?,'admin','Review',?,11300)",
+        )
+          .bind(payment.id, crypto.randomUUID(), hold)
+          .run();
+      await env.DB.prepare("UPDATE jobs SET status = 'in_progress'").run();
+      expect(
+        await (await request("/payments/status", "worker", {}, "GET")).json(),
+      ).toMatchObject({
+        frozen: true,
+        instantEligible: false,
+        standardEligible: false,
+      });
+      expect(
+        (
+          await request("/payments/payout", "worker", {
+            method: "standard",
+            amount_cents: 1000,
+            requestId: crypto.randomUUID(),
+          })
+        ).status,
+      ).toBe(409);
+      expect(fixture.stripe.payouts.create).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(["destination", "method", "metadata"])(
+    "rejects a signed payout webhook whose canonical %s differs from the durable request",
+    async (field) => {
+      await request("/payments/payout", "worker", {
+        method: "standard",
+        amount_cents: 1000,
+        requestId: crypto.randomUUID(),
+      });
+      const payout = [...fixture.payouts.values()][0]!;
+      if (field === "destination") payout.destination = "ba_unrelated";
+      if (field === "method") payout.method = "instant";
+      if (field === "metadata") payout.metadata!.daywork_user_id = "other";
+      payout.status = "paid";
+      expect(
+        (
+          await notify("payout.paid", payout, {
+            account: "acct_worker",
+            connected: true,
+          })
+        ).status,
+      ).toBe(400);
+      expect((await row("SELECT status FROM payout_intents"))!.status).toBe(
+        "pending",
+      );
+    },
+  );
 
   it("reports test mode and balances separately without claiming funds have arrived at a bank", async () => {
     const response = await request("/payments/status", "worker", {}, "GET");

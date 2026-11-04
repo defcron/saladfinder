@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { ArrowRight, Mail } from "lucide-react";
-import { post, type Role } from "../api";
+import { post, safeInternalPath, type Role } from "../api";
 import { useApp } from "../context";
 import {
   ActionFeedback,
@@ -22,11 +22,7 @@ export function SignIn() {
   const [resetKey, setResetKey] = useState(0);
   const action = useAction();
   const [params] = useSearchParams();
-  const next = params.get("next") || "/dashboard";
-  const safeNext =
-    next.startsWith("/") && !next.startsWith("//") && !next.includes("\\")
-      ? next
-      : "/dashboard";
+  const safeNext = safeInternalPath(params.get("next"));
   const submit = (e: FormEvent) => {
     e.preventDefault();
     void action.run(async () => {
@@ -40,6 +36,11 @@ export function SignIn() {
         });
         setSent(true);
         setDevToken(response.devToken || "");
+        try {
+          sessionStorage.setItem("saladfinder-sign-in-next", safeNext);
+        } catch {
+          /* Navigation still works without browser storage. */
+        }
       } finally {
         setToken("");
         setResetKey((v) => v + 1);
@@ -114,6 +115,7 @@ export function SignIn() {
             Your name <span className="optional">for new accounts</span>
             <input
               autoComplete="name"
+              minLength={2}
               value={name}
               onChange={(e) => setName(e.target.value)}
               maxLength={80}
@@ -190,7 +192,18 @@ export function Verify() {
     }
     void post("/auth/verify", { token })
       .then(refreshUser)
-      .then(() => navigate("/dashboard", { replace: true }))
+      .then(() => {
+        let next = "/dashboard";
+        try {
+          next = safeInternalPath(
+            sessionStorage.getItem("saladfinder-sign-in-next"),
+          );
+          sessionStorage.removeItem("saladfinder-sign-in-next");
+        } catch {
+          /* Default to the dashboard when storage is unavailable. */
+        }
+        navigate(next, { replace: true });
+      })
       .catch((e: Error) => setError(e.message));
   }, [navigate, refreshUser]);
   return (

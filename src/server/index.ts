@@ -5,7 +5,7 @@ import { HTTPException } from "hono/http-exception";
 import { ZodError } from "zod";
 import { auth, loadUser } from "./auth";
 import { marketplace } from "./marketplace";
-import { isLocal, originGuard } from "./middleware";
+import { isLocal, listingsEnabled, originGuard } from "./middleware";
 import { payments } from "./payments";
 import { isSignInReady } from "./email";
 import { canonicalRedirect } from "./routing";
@@ -47,6 +47,8 @@ app.get("/api/health", async (c) => {
 app.get("/api/config", (c) =>
   c.json({
     launchMode: c.env.LAUNCH_MODE,
+    listingsReady:
+      listingsEnabled(c.env, c.req.url) && isSignInReady(c.env, c.req.url),
     currency: "CAD",
     region: "Ontario",
     authReady: isSignInReady(c.env, c.req.url),
@@ -59,7 +61,7 @@ app.get("/api/config", (c) =>
       ) &&
       (isLocal(c.env, c.req.url) ||
         (c.env.APP_ENV === "staging"
-          ? /^(sk|rk)_test_/.test(c.env.STRIPE_SECRET_KEY || "")
+          ? /^(sk|rk|rkcs)_test_/.test(c.env.STRIPE_SECRET_KEY || "")
           : /^(sk|rk)_live_/.test(c.env.STRIPE_SECRET_KEY || ""))),
     turnstileSiteKey: c.env.TURNSTILE_SITE_KEY,
     supportEmail: c.env.SUPPORT_EMAIL,

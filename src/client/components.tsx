@@ -182,8 +182,18 @@ export function PreviewNotice() {
     <div className="preview-notice">
       <Info size={23} aria-hidden="true" />
       <span>
-        Launching in Ontario. <Link to="/early-access">Join early access</Link>{" "}
-        while payments are being set up.
+        {config.listingsReady ? (
+          <>
+            Posting and applications are open. Hiring and payments are not
+            available yet. Do not start work through this preview.
+          </>
+        ) : (
+          <>
+            Launching in Ontario.{" "}
+            <Link to="/early-access">Join early access</Link> while payments are
+            being set up.
+          </>
+        )}
       </span>
     </div>
   ) : null;
@@ -240,18 +250,24 @@ export function RequireUser({ children }: { children: ReactNode }) {
 }
 export function useAction() {
   const [busy, setBusy] = useState(false);
+  const inFlight = useRef(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   async function run(fn: () => Promise<void>, message = "") {
+    if (inFlight.current) return false;
+    inFlight.current = true;
     setBusy(true);
     setError("");
     setSuccess("");
     try {
       await fn();
       if (message) setSuccess(message);
+      return true;
     } catch (e) {
       setError((e as Error).message);
+      return false;
     } finally {
+      inFlight.current = false;
       setBusy(false);
     }
   }

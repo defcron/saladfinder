@@ -20,6 +20,7 @@ import {
   requestIp,
   requireAdmin,
   requireLive,
+  requireListings,
   requireUser,
   verifyTurnstile,
 } from "./middleware";
@@ -98,6 +99,13 @@ marketplace.get("/jobs/:id", async (c) => {
   if (user?.suspended_at)
     fail(403, "Your account is suspended. Contact support.");
   const admin = isAdmin(user, c.env);
+  const posterSuspended = await c.env.DB.prepare(
+    "SELECT id FROM users WHERE id=? AND suspended_at IS NOT NULL",
+  )
+    .bind(job.poster_id)
+    .first();
+  if (posterSuspended && !admin && user?.id !== job.poster_id)
+    fail(404, "Job not found.");
   if (
     job.status !== "open" &&
     (!user || (!participant(job, user.id) && !admin))
@@ -172,7 +180,7 @@ const jobInput = z.object({
     .min(1)
     .max(5),
 });
-marketplace.post("/jobs", requireUser, requireLive, async (c) => {
+marketplace.post("/jobs", requireUser, requireListings, async (c) => {
   const body = await jsonInput(c, jobInput);
   const user = c.get("user")!;
   await rateLimit(c, "post-job", user.id, 20, 86400);
@@ -219,7 +227,7 @@ marketplace.post("/jobs", requireUser, requireLive, async (c) => {
   ]);
   return c.json({ job: await getJob(c.env.DB, id) }, 201);
 });
-marketplace.post("/jobs/:id/apply", requireUser, requireLive, async (c) => {
+marketplace.post("/jobs/:id/apply", requireUser, requireListings, async (c) => {
   const { message } = await jsonInput(
     c,
     z.object({ message: z.string().trim().min(20).max(2000) }),
@@ -242,7 +250,7 @@ marketplace.post("/jobs/:id/apply", requireUser, requireLive, async (c) => {
 marketplace.post(
   "/jobs/:id/applications/withdraw",
   requireUser,
-  requireLive,
+  requireListings,
   async (c) => {
     const result = await c.env.DB.prepare(
       "UPDATE applications SET status='withdrawn' WHERE job_id=? AND worker_id=? AND status='pending'",
@@ -301,19 +309,24 @@ marketplace.post("/jobs/:id/start", requireUser, requireLive, async (c) => {
     fail(409, "Only the assigned worker can start an assigned job.");
   return c.json({ ok: true });
 });
-marketplace.post("/jobs/:id/cancel", requireUser, requireLive, async (c) => {
-  const result = await c.env.DB.prepare(
-    "UPDATE jobs SET status='cancelled',updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=? AND poster_id=? AND status='open'",
-  )
-    .bind(c.req.param("id"), c.get("user")!.id)
-    .run();
-  if (!result.meta.changes)
-    fail(
-      409,
-      "Only an open job can be cancelled here. For an assigned job, open a support report.",
-    );
-  return c.json({ ok: true });
-});
+marketplace.post(
+  "/jobs/:id/cancel",
+  requireUser,
+  requireListings,
+  async (c) => {
+    const result = await c.env.DB.prepare(
+      "UPDATE jobs SET status='cancelled',updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=? AND poster_id=? AND status='open'",
+    )
+      .bind(c.req.param("id"), c.get("user")!.id)
+      .run();
+    if (!result.meta.changes)
+      fail(
+        409,
+        "Only an open job can be cancelled here. For an assigned job, open a support report.",
+      );
+    return c.json({ ok: true });
+  },
+);
 marketplace.get("/dashboard", requireUser, async (c) => {
   const user = c.get("user")!;
   const [posted, assigned, applications] = await c.env.DB.batch([
@@ -430,49 +443,54 @@ marketplace.post("/jobs/:id/reviews", requireUser, requireLive, async (c) => {
   if (!result.meta.changes) fail(409, "You have already reviewed this job.");
   return c.json({ ok: true }, 201);
 });
-marketplace.post("/jobs/:id/report", requireUser, requireLive, async (c) => {
-  const { reason } = await jsonInput(
-    c,
-    z.object({ reason: z.string().trim().min(20).max(3000) }),
-  );
-  const user = c.get("user")!;
-  const job = await getJob(c.env.DB, c.req.param("id"));
-  if (job.status !== "open" && !participant(job, user.id))
-    fail(403, "Only participants can report this private job.");
-  await rateLimit(c, "report", user.id, 10, 86400);
-  const id = crypto.randomUUID();
-  const freeze = participant(job, user.id) && job.status !== "cancelled";
-  const results = await c.env.DB.batch([
-    c.env.DB.prepare(
-      "INSERT OR IGNORE INTO reports (id,job_id,reporter_id,reason,prior_status) VALUES (?,?,?,?,?)",
-    ).bind(id, job.id, user.id, reason, job.status),
-    c.env.DB.prepare(
-      "UPDATE jobs SET status='disputed',updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=? AND ?=1 AND status<>'cancelled' AND EXISTS(SELECT 1 FROM reports WHERE id=?)",
-    ).bind(job.id, freeze ? 1 : 0, id),
-    c.env.DB.prepare(
-      "INSERT INTO audit_log (id,actor_id,action,entity_id,detail) SELECT ?,?,'job.reported',?,? WHERE EXISTS(SELECT 1 FROM reports WHERE id=?)",
-    ).bind(
-      crypto.randomUUID(),
-      user.id,
-      job.id,
-      JSON.stringify({ report_id: id, freeze }),
-      id,
-    ),
-  ]);
-  if (!results[0].meta.changes)
-    fail(409, "You already have an open report for this job.");
-  if (freeze) await suspendJobPayments(c.env, job.id);
-  return c.json(
-    {
-      ok: true,
-      reportId: id,
-      message: freeze
-        ? "Report recorded. New payments are paused while the report is reviewed."
-        : "Report recorded for review.",
-    },
-    201,
-  );
-});
+marketplace.post(
+  "/jobs/:id/report",
+  requireUser,
+  requireListings,
+  async (c) => {
+    const { reason } = await jsonInput(
+      c,
+      z.object({ reason: z.string().trim().min(20).max(3000) }),
+    );
+    const user = c.get("user")!;
+    const job = await getJob(c.env.DB, c.req.param("id"));
+    if (job.status !== "open" && !participant(job, user.id))
+      fail(403, "Only participants can report this private job.");
+    await rateLimit(c, "report", user.id, 10, 86400);
+    const id = crypto.randomUUID();
+    const freeze = participant(job, user.id) && job.status !== "cancelled";
+    const results = await c.env.DB.batch([
+      c.env.DB.prepare(
+        "INSERT OR IGNORE INTO reports (id,job_id,reporter_id,reason,prior_status) VALUES (?,?,?,?,?)",
+      ).bind(id, job.id, user.id, reason, job.status),
+      c.env.DB.prepare(
+        "UPDATE jobs SET status='disputed',updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=? AND ?=1 AND status<>'cancelled' AND EXISTS(SELECT 1 FROM reports WHERE id=?)",
+      ).bind(job.id, freeze ? 1 : 0, id),
+      c.env.DB.prepare(
+        "INSERT INTO audit_log (id,actor_id,action,entity_id,detail) SELECT ?,?,'job.reported',?,? WHERE EXISTS(SELECT 1 FROM reports WHERE id=?)",
+      ).bind(
+        crypto.randomUUID(),
+        user.id,
+        job.id,
+        JSON.stringify({ report_id: id, freeze }),
+        id,
+      ),
+    ]);
+    if (!results[0].meta.changes)
+      fail(409, "You already have an open report for this job.");
+    if (freeze) await suspendJobPayments(c.env, job.id);
+    return c.json(
+      {
+        ok: true,
+        reportId: id,
+        message: freeze
+          ? "Report recorded. New payments are paused while the report is reviewed."
+          : "Report recorded for review.",
+      },
+      201,
+    );
+  },
+);
 marketplace.post("/waitlist", async (c) => {
   const input = await jsonInput(
     c,
@@ -578,6 +596,18 @@ marketplace.post("/admin/reports/:id/resolve", requireAdmin, async (c) => {
     .first<{ count: number }>();
   if (input.action !== "none" && pending?.count)
     fail(409, "Resolve the other open reports before changing the job state.");
+  if (input.action === "restore_job") {
+    const unresolvedMoney = await c.env.DB.prepare(
+      "SELECT p.id FROM payment_attempts p JOIN milestones m ON m.id=p.milestone_id LEFT JOIN refund_intents r ON r.payment_attempt_id=p.id WHERE m.job_id=? AND (p.status='disputed' OR (r.status IS NOT NULL AND r.status NOT IN ('succeeded','canceled'))) LIMIT 1",
+    )
+      .bind(report.job_id)
+      .first();
+    if (unresolvedMoney)
+      fail(
+        409,
+        "Reconcile the Stripe dispute or unresolved refund before restoring this job.",
+      );
+  }
   if (input.action === "cancel_job") {
     const money = await c.env.DB.prepare(
       "SELECT COUNT(*) AS count FROM milestones WHERE job_id=? AND status IN ('paid','checkout_pending')",
@@ -610,8 +640,15 @@ marketplace.post("/admin/reports/:id/resolve", requireAdmin, async (c) => {
       "UPDATE reports SET status='resolved',resolution=?,resolved_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=? AND status='open'",
     ).bind(input.resolution, report.id),
     c.env.DB.prepare(
-      "UPDATE jobs SET status=?,updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=? AND (status='disputed' OR (?='cancel_job' AND status='open')) AND ?<> 'none' AND NOT EXISTS(SELECT 1 FROM reports WHERE job_id=jobs.id AND status='open') AND (?<>'cancel_job' OR NOT EXISTS(SELECT 1 FROM milestones WHERE job_id=jobs.id AND status IN ('paid','checkout_pending')))",
-    ).bind(update, report.job_id, input.action, input.action, input.action),
+      "UPDATE jobs SET status=?,updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=? AND (status='disputed' OR (?='cancel_job' AND status='open')) AND ?<> 'none' AND NOT EXISTS(SELECT 1 FROM reports WHERE job_id=jobs.id AND status='open') AND (?<>'cancel_job' OR NOT EXISTS(SELECT 1 FROM milestones WHERE job_id=jobs.id AND status IN ('paid','checkout_pending'))) AND (?<>'restore_job' OR NOT EXISTS(SELECT 1 FROM payment_attempts p JOIN milestones m ON m.id=p.milestone_id LEFT JOIN refund_intents r ON r.payment_attempt_id=p.id WHERE m.job_id=jobs.id AND (p.status='disputed' OR (r.status IS NOT NULL AND r.status NOT IN ('succeeded','canceled')))))",
+    ).bind(
+      update,
+      report.job_id,
+      input.action,
+      input.action,
+      input.action,
+      input.action,
+    ),
     audit(c.env.DB, c.get("user")!.id, "report.resolved", report.id, {
       action: input.action,
     }),

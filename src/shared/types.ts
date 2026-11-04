@@ -93,6 +93,7 @@ export interface Review {
 }
 export interface Config {
   launchMode: "preview" | "live";
+  listingsReady: boolean;
   currency: "CAD";
   region: string;
   authReady: boolean;

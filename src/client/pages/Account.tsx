@@ -11,6 +11,7 @@ import {
   type Application,
 } from "../api";
 import { useApp } from "../context";
+import { PayoutForm, type PaymentStatus } from "../payouts";
 import {
   ActionFeedback,
   Alert,
@@ -28,21 +29,27 @@ type DashboardData = {
   applications: Application[];
 };
 export function Dashboard() {
+  const { user } = useApp();
   const [data, setData] = useState<DashboardData | null>(null);
   const [error, setError] = useState("");
   const [tab, setTab] = useState<"assigned" | "posted" | "applications">(
-    "assigned",
+    user?.role === "poster" ? "posted" : "assigned",
   );
+  const [refreshing, setRefreshing] = useState(false);
   const [revision, setRevision] = useState(0);
   useEffect(() => {
     let active = true;
     setError("");
+    setRefreshing(true);
     api<DashboardData>("/dashboard")
       .then((value) => {
         if (active) setData(value);
       })
       .catch((e: Error) => {
         if (active) setError(e.message);
+      })
+      .finally(() => {
+        if (active) setRefreshing(false);
       });
     return () => {
       active = false;
@@ -56,10 +63,11 @@ export function Dashboard() {
         </PageHeading>
         <button
           className="button button-outline"
+          disabled={refreshing}
           onClick={() => setRevision((v) => v + 1)}
         >
           <RefreshCw size={17} />
-          Refresh
+          {refreshing ? "Refreshing…" : "Refresh"}
         </button>
       </div>
       <div className="tabs" role="tablist" aria-label="Work overview">
@@ -73,11 +81,30 @@ export function Dashboard() {
           <button
             role="tab"
             aria-selected={tab === key}
+            tabIndex={tab === key ? 0 : -1}
             aria-controls={`panel-${key}`}
             id={`tab-${key}`}
             key={key}
             className={tab === key ? "active" : ""}
             onClick={() => setTab(key)}
+            onKeyDown={(event) => {
+              const tabs = ["assigned", "posted", "applications"] as const;
+              const index = tabs.indexOf(key);
+              const next =
+                event.key === "ArrowRight"
+                  ? (index + 1) % tabs.length
+                  : event.key === "ArrowLeft"
+                    ? (index + tabs.length - 1) % tabs.length
+                    : event.key === "Home"
+                      ? 0
+                      : event.key === "End"
+                        ? tabs.length - 1
+                        : -1;
+              if (next < 0) return;
+              event.preventDefault();
+              setTab(tabs[next]);
+              document.getElementById(`tab-${tabs[next]}`)?.focus();
+            }}
           >
             {label}
             {data && <span>{data[key].length}</span>}
@@ -153,32 +180,6 @@ export function Dashboard() {
   );
 }
 
-type Payout = {
-  id: string;
-  amount_cents: number;
-  status: string;
-  method: string;
-  arrival_date: number | null;
-  created: number;
-};
-type PaymentStatus = {
-  configured: boolean;
-  testMode?: boolean;
-  accountReady: boolean;
-  onboardingComplete: boolean;
-  chargesEnabled: boolean;
-  payoutsEnabled: boolean;
-  instantEligible: boolean;
-  frozen?: boolean;
-  message: string;
-  balance?: {
-    available_cents: number;
-    pending_cents: number;
-    instant_available_cents: number;
-    currency: string;
-  };
-  payouts?: Payout[];
-};
 export function Account() {
   const { user, config, refreshUser } = useApp();
   const [params] = useSearchParams();
@@ -192,23 +193,21 @@ export function Account() {
   const paymentsAction = useAction();
   const [status, setStatus] = useState<PaymentStatus | null>(null);
   const [statusError, setStatusError] = useState("");
+  const [statusLoading, setStatusLoading] = useState(true);
   const [revision, setRevision] = useState(0);
-  const [amount, setAmount] = useState("");
-  const [method, setMethod] = useState<"standard" | "instant">("standard");
-  const [attempt, setAttempt] = useState<{
-    amount_cents: number;
-    method: "standard" | "instant";
-    requestId: string;
-  } | null>(null);
   useEffect(() => {
     let active = true;
     setStatusError("");
+    setStatusLoading(true);
     api<PaymentStatus>("/payments/status")
       .then((value) => {
         if (active) setStatus(value);
       })
       .catch((e: Error) => {
         if (active) setStatusError(e.message);
+      })
+      .finally(() => {
+        if (active) setStatusLoading(false);
       });
     return () => {
       active = false;
@@ -216,6 +215,19 @@ export function Account() {
   }, [revision]);
   const profileSubmit = (e: FormEvent) => {
     e.preventDefault();
+    const selectedSkills = skills
+      .split(",")
+      .map((skill) => skill.trim())
+      .filter(Boolean);
+    if (
+      selectedSkills.length > 15 ||
+      selectedSkills.some((skill) => skill.length > 40)
+    ) {
+      action.setError(
+        "Use up to 15 skills, with no more than 40 characters per skill.",
+      );
+      return;
+    }
     void action.run(async () => {
       await api("/me", {
         method: "PATCH",
@@ -223,10 +235,7 @@ export function Account() {
           name,
           bio,
           city,
-          skills: skills
-            .split(",")
-            .map((s) => s.trim())
-            .filter(Boolean),
+          skills: selectedSkills,
         }),
       });
       await refreshUser();
@@ -237,21 +246,6 @@ export function Account() {
       const response = await post<{ url: string }>(path);
       stripeRedirect(response.url);
     });
-  const payout = (e: FormEvent) => {
-    e.preventDefault();
-    const request = attempt || {
-      amount_cents: Math.round(Number(amount) * 100),
-      method,
-      requestId: crypto.randomUUID(),
-    };
-    setAttempt(request);
-    void paymentsAction.run(async () => {
-      await post("/payments/payout", request);
-      setAttempt(null);
-      setAmount("");
-      setRevision((v) => v + 1);
-    }, "Payout requested. Follow its status below; bank arrival is not yet confirmed.");
-  };
   return (
     <section className="page-wrap">
       <PageHeading title="Make yourself at home.">
@@ -305,7 +299,7 @@ export function Account() {
               />
               <span className="field-hint">
                 Separate skills with commas. Keep private contact details out of
-                your profile.
+                your profile. Up to 15 skills, 40 characters each.
               </span>
             </label>
             <ActionFeedback {...action} />
@@ -345,6 +339,7 @@ export function Account() {
             <button
               className="button-quiet icon-button"
               aria-label="Refresh payment status"
+              disabled={statusLoading || paymentsAction.busy}
               onClick={() => setRevision((v) => v + 1)}
             >
               <RefreshCw size={18} />
@@ -352,8 +347,9 @@ export function Account() {
           </div>
           {params.get("onboarding") && (
             <Alert kind="info">
-              You’re back from Stripe. Refresh your status to see whether
-              anything else is needed.
+              {params.get("onboarding") === "refresh"
+                ? "Your Stripe setup link expired. Continue with Stripe to get a fresh link."
+                : "You’re back from Stripe. We’re checking your setup; Stripe may still need more information. Returning here does not itself confirm verification."}
             </Alert>
           )}
           <ActionFeedback {...paymentsAction} />
@@ -374,7 +370,7 @@ export function Account() {
                     <ShieldCheck size={28} strokeWidth={1.5} />
                     <div>
                       <h3>
-                        {status.accountReady
+                        {status.accountReady && !status.payoutSetupRequired
                           ? "Your Stripe account is ready."
                           : "Set up secure payments."}
                       </h3>
@@ -396,15 +392,32 @@ export function Account() {
                       separate.
                     </Alert>
                   )}
+                  {status.payoutSetupRequired && (
+                    <Alert kind="info">
+                      Complete Stripe setup to request payouts here. This
+                      switches your Stripe account from scheduled payouts to
+                      payouts you request yourself. No payout is sent by this
+                      setup step.
+                    </Alert>
+                  )}
+                  {status.payoutSchedule === "manual" && (
+                    <p className="small-text">
+                      Your payouts are set to manual. Request an instant or
+                      standard payout below when funds are eligible; SaladFinder
+                      does not automatically send your balance.
+                    </p>
+                  )}
                   <div className="action-row">
                     <button
                       className="button"
                       disabled={paymentsAction.busy || !config?.paymentsReady}
                       onClick={() => external("/payments/onboard")}
                     >
-                      {status.accountReady
-                        ? "Update payment details"
-                        : "Continue with Stripe"}
+                      {status.payoutSetupRequired
+                        ? "Set up requested payouts"
+                        : status.accountReady
+                          ? "Update payment details"
+                          : "Continue with Stripe"}
                       <ExternalLink size={16} />
                     </button>
                     {status.onboardingComplete && (
@@ -440,78 +453,19 @@ export function Account() {
                         eligible balance does not guarantee an instant payout
                         will be approved.
                       </p>
-                      {status.payoutsEnabled && !status.frozen && (
-                        <form
-                          className="form-stack payout-form"
-                          onSubmit={payout}
-                        >
-                          <h3>Request a payout</h3>
-                          <label>
-                            Payout method
-                            <select
-                              value={method}
-                              disabled={!!attempt}
-                              onChange={(e) =>
-                                setMethod(
-                                  e.target.value as "standard" | "instant",
-                                )
-                              }
-                            >
-                              <option value="standard">
-                                Standard bank payout
-                              </option>
-                              <option
-                                value="instant"
-                                disabled={!status.instantEligible}
-                              >
-                                Instant · eligible debit card
-                              </option>
-                            </select>
-                          </label>
-                          <label>
-                            Amount (CAD)
-                            <input
-                              type="number"
-                              min={method === "instant" ? "0.60" : "1"}
-                              max={
-                                (method === "instant"
-                                  ? Math.min(
-                                      status.balance.instant_available_cents,
-                                      999900,
-                                    )
-                                  : status.balance.available_cents) / 100
-                              }
-                              step="0.01"
-                              required
-                              value={amount}
-                              disabled={!!attempt}
-                              onChange={(e) => setAmount(e.target.value)}
-                            />
-                          </label>
-                          <p className="small-text">
-                            {method === "instant"
-                              ? "For supported Canadian debit cards. Stripe usually delivers eligible instant payouts within 30 minutes; delays can occur."
-                              : "Standard payouts follow Stripe’s settlement schedule and your bank’s processing time."}{" "}
-                            SaladFinder adds no worker payout fee.
-                          </p>
-                          {attempt && (
-                            <p className="small-text">
-                              This request is saved. Retrying uses the same
-                              payout reference to prevent a duplicate.
-                            </p>
-                          )}
-                          <button
-                            className="button"
-                            disabled={paymentsAction.busy}
-                          >
-                            {paymentsAction.busy
-                              ? "Requesting…"
-                              : attempt
-                                ? "Retry this payout request"
-                                : "Request payout"}
-                            <ArrowRight size={17} />
-                          </button>
-                        </form>
+                      {(status.payoutsEnabled || status.pendingPayout) && (
+                        <PayoutForm
+                          key={`${user!.id}:${status.accountId || user?.stripe_account_id || "unconnected"}`}
+                          status={status}
+                          userId={user!.id}
+                          accountId={
+                            status.accountId ||
+                            user?.stripe_account_id ||
+                            "unconnected"
+                          }
+                          supportEmail={config?.supportEmail || ""}
+                          refresh={() => setRevision((value) => value + 1)}
+                        />
                       )}
                     </>
                   )}

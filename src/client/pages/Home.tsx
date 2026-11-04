@@ -59,7 +59,8 @@ export function Home() {
     next.delete("page");
     setParams(next);
   };
-  const showExamples = config?.launchMode === "preview" && total === 0;
+  const showExamples =
+    config?.launchMode === "preview" && !config.listingsReady && total === 0;
   const visible = showExamples
     ? examples.filter(
         (j) =>
@@ -198,11 +199,16 @@ export function Home() {
           ) : (
             <Empty title="Nothing here just yet.">
               <p>
-                Try another city or category, or be first to hear when jobs open
-                near you.
+                {config?.listingsReady
+                  ? "No open jobs match this search. Try another city or category, or post the work you need help with."
+                  : "Try another city or category, or be first to hear when jobs open near you."}
               </p>
-              <Link to="/early-access" className="text-link">
-                Join early access <ArrowRight size={18} />
+              <Link
+                to={config?.listingsReady ? "/post" : "/early-access"}
+                className="text-link"
+              >
+                {config?.listingsReady ? "Post a job" : "Join early access"}{" "}
+                <ArrowRight size={18} />
               </Link>
             </Empty>
           )}
