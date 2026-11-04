@@ -15,10 +15,7 @@ import { post, money, type Job, readable } from "./api";
 export function Logo({ small = false }: { small?: boolean }) {
   return (
     <span className={`logo ${small ? "logo-small" : ""}`}>
-      <svg viewBox="0 0 48 36" aria-hidden="true">
-        <path d="M0 26h12V16h12V6h18v9H30v10H18v10H0z" fill="currentColor" />
-      </svg>
-      <span>SaladFinder</span>
+      <img src="/brand/logo.svg" alt="SaladFinder" width="230" height="44" />
     </span>
   );
 }

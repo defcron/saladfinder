@@ -2421,3 +2421,54 @@ code {
 .job-refresh {
   margin: 20px 0;
 }
+
+/* Shared identity: SVG logos stay sharp; the banner uses optimized raster exports. */
+.logo img {
+  display: block;
+  width: 230px;
+  height: auto;
+}
+.logo-small img {
+  width: 190px;
+}
+.brand-banner {
+  display: block;
+  margin: 0 0 18px;
+}
+.brand-banner img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 12px;
+}
+.auth-brand {
+  display: block;
+  width: 116px;
+  height: auto;
+  margin: 0 auto 24px;
+}
+@media (min-width: 601px) {
+  .branded-hero h1 {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  .branded-hero {
+    padding-top: 0;
+    min-height: auto;
+  }
+}
+@media (max-width: 600px) {
+  .logo img {
+    width: 175px;
+  }
+  .brand-banner img {
+    aspect-ratio: 1000 / 588;
+    object-fit: cover;
+  }
+}

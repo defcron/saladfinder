@@ -1,3 +1,15 @@
+# Brand integration — 2026-11-04
+
+Production Worker version: `813ef48d-b0a7-4a48-9f8f-96b3aea9aa4f`.
+
+Integrated vector wordmark in shared header/footer, square logo on sign-in, responsive homepage banner, full square favicon and touch icon, and Open Graph/social share image. Optimized delivery assets accompany the original PNG/SVG masters and brand guide. Sign-in mail now contains escaped HTML, a compatible PNG logo, accessible text links and its existing plain-text alternative. Stripe-hosted branding remains separate and unchanged.
+
+Validation: `npm run check` passed 154 tests plus typechecking/build; coverage passed (93.04% lines); all 18 browser tests passed. Live 1440px and 390px pages loaded the new assets without horizontal overflow or JavaScript runtime errors; menu/post navigation and sign-in branding were checked. Browser plugin was unavailable, so Playwright performed rendered app checks. One Cloudflare-injected analytics beacon was blocked by the existing CSP; application functionality was unaffected and CSP was not relaxed.
+
+The actual email function was exercised through a temporary authenticated fixed-recipient Worker. Cloudflare accepted the message, and the HTML brand message was observed in the operator's Workspace inbox through native Chrome. Its harmless diagnostic URL was not a real sign-in token. The temporary Worker and credential were deleted. Mobile/desktop HTML email previews were inspected; this does not establish all email-client compatibility.
+
+Earlier records below are historical.
+
 # Root-domain release — 2026-11-04
 
 Deployed Worker `2bc1c782-e35f-4dfa-9c65-930013959863` with root APP_URL and explicit root/www routes. Local and staging routes are explicitly empty to prevent production-route inheritance. Check/typecheck/build and all 153 unit tests passed; coverage passed (93% lines); all 18 browser tests passed after isolating local routes. Live root home, sign-in and pricing returned 200 over verified HTTPS. www returned 308 to root preserving paths/queries. Root-origin invalid auth input returned 400 and hostile origin returned 403. Full real-user sign-in was not repeated.

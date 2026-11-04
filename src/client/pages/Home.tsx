@@ -75,7 +75,17 @@ export function Home() {
     : jobs;
   return (
     <div className="page-wrap home">
-      <section className="hero">
+      <picture className="brand-banner">
+        <source media="(max-width: 600px)" srcSet="/brand/banner-art.webp" />
+        <img
+          src="/brand/banner.webp"
+          width="1500"
+          height="500"
+          fetchPriority="high"
+          alt="Neighbours helping with moving, furniture assembly and garden work"
+        />
+      </picture>
+      <section className="hero branded-hero">
         <div>
           <h1>
             Good work.

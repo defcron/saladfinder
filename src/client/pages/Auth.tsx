@@ -49,6 +49,13 @@ export function SignIn() {
   };
   return (
     <section className="page-wrap narrow">
+      <img
+        className="auth-brand"
+        src="/brand/saladfinder-logo-square-v1.svg"
+        width="1254"
+        height="1254"
+        alt="SaladFinder"
+      />
       <PageHeading
         title={user ? "You’re signed in." : "Good work starts here."}
       >

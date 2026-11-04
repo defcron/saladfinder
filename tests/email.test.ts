@@ -83,6 +83,8 @@ describe("transactional email provider selection", () => {
         to: "member@example.test",
         subject: "Your SaladFinder sign-in link",
       });
+      expect(message.html).toContain("Your sign-in link");
+      expect(message.html).toContain("/brand/logo-email.png");
       const token = message.text?.match(
         /http:\/\/localhost\/auth\/verify#token=([a-f0-9]{64})/,
       )?.[1];
@@ -245,5 +247,20 @@ describe("transactional email provider selection", () => {
       fixture.env,
     );
     expect(await remoteConfig.json()).toMatchObject({ authReady: false });
+  });
+});
+
+describe("branded sign-in email", () => {
+  it("provides an image-independent sign-in action and escapes HTML attributes", async () => {
+    const { signInEmailHtml } = await import("../src/server/email");
+    const html = signInEmailHtml(
+      "https://saladfinder.com/auth/verify?x=\"<&'#token=example",
+    );
+    expect(html).toContain("https://saladfinder.com/brand/logo-email.png");
+    expect(html).toContain('alt="SaladFinder"');
+    expect(html).toContain("Sign in to SaladFinder</a>");
+    expect(html).toContain("&quot;&lt;&amp;&#39;#token=example");
+    expect(html).toContain("15 minutes");
+    expect(html).not.toContain("<script");
   });
 });
