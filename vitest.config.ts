@@ -6,7 +6,11 @@ export default defineConfig({
     hookTimeout: 30000,
     coverage: {
       provider: "v8",
-      include: ["src/server/**/*.ts", "src/shared/**/*.ts"],
+      include: [
+        "src/server/**/*.ts",
+        "src/shared/**/*.ts",
+        "gateway/functions/**/*.ts",
+      ],
       exclude: ["**/*.d.ts"],
       reporter: ["text", "json-summary", "html"],
       thresholds: { statements: 85, branches: 75, functions: 90, lines: 90 },

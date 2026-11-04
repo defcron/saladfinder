@@ -23,6 +23,7 @@ jobs:
       - run: npm run typecheck
       - run: npm run coverage
       - run: npm run build
+      - run: npm run build:gateway
       - run: npx wrangler deploy --dry-run
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e

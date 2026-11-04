@@ -1,26 +1,40 @@
 # SaladFinder domain connection
 
-Status recorded on 2026-11-04: the owner selected SaladFinder and reported owning `saladfinder.com` at Netfirms. The app is deployed in preview at `https://daywork.defcronyke.workers.dev`. The domain still uses Netfirms nameservers and serves its default parking page; it is not yet the app's live address.
+**Project paused by the operator.** The later deployment and DNS checkpoint in [PAUSED.md](PAUSED.md) supersedes the preparation status below; do not resume setup without the operator's instruction.
 
-## Prepared in Cloudflare
+Status recorded on 2026-11-04: the owner requires **Netfirms to remain the authoritative DNS provider** for `saladfinder.com`. The production app remains in preview at `https://daywork.defcronyke.workers.dev`; its canonical `APP_URL` has not changed to the custom domain.
 
-- A Free Website DNS zone for `saladfinder.com`, currently pending activation.
-- Assigned nameservers: `maciej.ns.cloudflare.com` and `rihana.ns.cloudflare.com`.
-- All 14 records discovered by Cloudflare's DNS scan were imported with proxying disabled, including the existing MX/SPF records, mail hosts, parking-page address and `www` alias. This scan is not a complete export of Netfirms DNS and cannot establish that every custom record was found.
-- The existing Turnstile widget is named SaladFinder preview and allows both `daywork.defcronyke.workers.dev` and `saladfinder.com` (including its subdomains). Its secret was retained.
-- No paid plan or domain transfer was ordered. No Netfirms nameserver change has been made.
-- Preserved `kycaml.saladfinder.com CNAME ghs.googlehosted.com`, DNS-only, TTL 3600. Both authoritative Netfirms nameservers returned this record; the initial DNS scan missed it. The user confirmed this is the legacy hostname.
-- Universal SSL is enabled. The pending zone now uses Full (strict), minimum TLS 1.2, TLS 1.3 enabled, and Always Use HTTPS. No certificate has been issued for the new app domain yet.
-- DMARC reporting is enabled with the provider-assigned aggregate-report address and an initial `p=none` monitoring policy. Sending-domain onboarding is blocked until the zone becomes active. See [email setup](EMAIL.md).
+## Current authoritative DNS and reversal
 
-## Complete the connection
+A brief change to Cloudflare nameservers was reversed. The registry delegation and subsequent checks through Google Public DNS, Cloudflare DNS and Quad9 returned the original nameservers:
 
-1. Preserve the legacy `kycaml` CNAME and compare the full DNS list in Netfirms with Cloudflare before switching. The operator authorized replacing Netfirms defaults. Replace the parking-page A record and `www` alias with the app's custom domains, and replace old mail records only when the new routing/sending services are configured. A forwarding destination has been submitted for provider verification; the private destination is intentionally not stored in this public repository.
-2. In Netfirms, change the domain's authoritative nameservers from `ns1.netfirms.com` / `ns2.netfirms.com` to the two Cloudflare nameservers above. Keep the domain registered at Netfirms. Verify any DNSSEC delegation before switching; do not leave a DS record pointing at the former DNS provider.
-3. Wait until Cloudflare reports the zone as active. Attach `saladfinder.com` and, if desired, `www.saladfinder.com` as custom domains to the existing `daywork` Worker. Put those custom domains in `wrangler.jsonc` so later deploys preserve them.
-4. Change production `APP_URL` to `https://saladfinder.com`. Implement and verify canonical routing from the old Workers address and `www` before advertising those aliases. The API currently checks the configured origin, so simply adding another hostname without this coordinated update is insufficient for form submissions.
-5. Verify public DNS, HTTPS, the rendered app, `/api/health`, `/api/config`, Turnstile and consent-backed early access on the actual new hostname. Update README, GitHub homepage, deployment health check and the Stripe endpoint instructions to the verified canonical URL. Keep `LAUNCH_MODE=preview`.
+- `ns1.netfirms.com`
+- `ns2.netfirms.com`
 
-Registrar activation is still pending: after the operator unlocked native browser access, the saved Netfirms login was rejected. A working authenticated registrar session is required. Do not send registrar credentials through the public Servo service or commit them to this repository.
+The original apex A record is `66.96.160.136`. The existing `kycaml.saladfinder.com CNAME ghs.googlehosted.com` remains in place with TTL 3600. The original root and `www` records, existing Google verification CNAME, and mail records were preserved or restored. Authoritative MX and SPF records have not been replaced for a new email service.
 
-The preserved legacy `kycaml` host already has an expired Google Trust Services certificate (expired 2024-10-02) and returns HTTP 503 from Google Frontend. Its DNS route was preserved; this pre-existing service failure requires access to its Google-hosted deployment. The separate GitHub Pages demo has HTTPS enforcement enabled and no custom domain. Do not repoint the legacy hostname to that demo without a separate migration decision.
+Registrar access is no longer the blocker. The remaining work must support external DNS at Netfirms. Do not change the nameservers again without an explicit change to that requirement.
+
+## Cloudflare state retained during cache expiry
+
+- The Free Website DNS zone activated during the brief delegation change. It is now **undelegated**, even if its dashboard status still says active. Its assigned nameservers are `maciej.ns.cloudflare.com` and `rihana.ns.cloudflare.com`.
+- Both newly attached Worker Custom Domains, `saladfinder.com` and `www.saladfinder.com`, were detached. They are not the app's active production endpoints.
+- The Cloudflare copy of the root and `www` DNS records was restored to the original records for resolvers that still cache the temporary Cloudflare delegation. The legacy `kycaml` CNAME and existing Google verification record are retained there too.
+- **Do not delete the staged Cloudflare zone while cached delegations expire.** Dashboard activation does not prove that Cloudflare currently controls the authoritative public DNS.
+- The initial Cloudflare scan imported 14 records, but it missed `kycaml`. Treat the scan as a partial discovery aid rather than a complete DNS backup.
+- The existing Turnstile widget is named SaladFinder preview and allows the Workers hostname and `saladfinder.com`, including its subdomains. Its secret was retained.
+- No paid plan or domain transfer was ordered. Incoming Cloudflare mail routing and outgoing sending are not enabled. See [email status](EMAIL.md).
+
+## Proposed connection while keeping Netfirms DNS
+
+The next proposed route is a **Cloudflare Pages gateway on `www.saladfinder.com`**, connected using an explicit CNAME at Netfirms. Cloudflare documents support for Pages subdomains with an external DNS provider: associate the custom domain with the Pages project first, then point the subdomain to that project's actual `pages.dev` hostname. This route still needs implementation and end-to-end verification; no Pages gateway activation is claimed here. [Cloudflare Pages custom-domain requirements](https://developers.cloudflare.com/pages/configuration/custom-domains/)
+
+An apex Pages domain uses different requirements: Cloudflare documents that it requires Cloudflare nameservers. Under the current Netfirms requirement, **an HTTPS redirect from `saladfinder.com` to `www.saladfinder.com` still needs verification with Netfirms**. Do not assume an ordinary DNS record performs an HTTP redirect or that registrar forwarding includes a valid apex HTTPS certificate. [Cloudflare Pages apex and subdomain requirements](https://developers.cloudflare.com/pages/configuration/custom-domains/)
+
+Before changing the app's canonical URL, verify the actual gateway, HTTPS, same-origin API requests, origin protection, Turnstile, sign-in links, and consent-backed early access on the intended hostname. Update the canonical URL and related deployment/Stripe instructions only as part of that verified migration. Keep `LAUNCH_MODE=preview`.
+
+## Preserved legacy service
+
+The `kycaml` hostname points to Google hosting, not GitHub Pages. The [public project README](https://github.com/defcronyke/kycaml-app/blob/master/README.md#L21) identifies it as an online mirror and lists a separate GitHub Pages demo. The Pages configuration has HTTPS enforcement enabled and no custom domain.
+
+Direct checks found a pre-existing expired Google Trust Services certificate on `kycaml.saladfinder.com` (expired 2024-10-02) and HTTP 503 from Google Frontend. Preserving the CNAME preserves its route; repairing the service requires access to its Google-hosted deployment. Keep this hostname outside the new app's routing and do not repoint it to the demo without a separate migration decision.

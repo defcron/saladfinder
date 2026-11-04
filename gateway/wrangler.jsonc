@@ -1,0 +1,12 @@
+{
+  "$schema": "../node_modules/wrangler/config-schema.json",
+  "name": "saladfinder",
+  "pages_build_output_dir": "./public",
+  "compatibility_date": "2026-11-04",
+  "limits": { "cpu_ms": 50 },
+  "services": [{ "binding": "APP", "service": "daywork" }],
+  "env": {
+    // Preview deployments intentionally have no access to the production app.
+    "preview": { "services": [] },
+  },
+}

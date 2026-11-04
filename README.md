@@ -1,5 +1,7 @@
 # SaladFinder
 
+**Operator-requested pause:** see [the saved project state](docs/PAUSED.md) before continuing deployment or domain setup.
+
 An Ontario/CAD local-services marketplace built with React, Cloudflare Workers, D1 and Stripe Connect. Customers post jobs, workers apply, and both parties agree on milestones. Customers pay approved milestones through Stripe Checkout; eligible workers can request an Instant Payout. Standard bank payouts remain available according to Stripe's actual timing.
 
 **Launch status: private preview.** Real-money transactions are disabled. A Canadian Stripe Connect account, verified transactional email, reviewed operator details/policies and provider acceptance are required before paid launch. This repository is not evidence that those external steps are complete. See [launch runbook](docs/LAUNCH.md) and [verification record](docs/VERIFICATION.md).

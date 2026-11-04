@@ -8,7 +8,8 @@ import { marketplace } from "./marketplace";
 import { isLocal, originGuard } from "./middleware";
 import { payments } from "./payments";
 import { isSignInReady } from "./email";
-import type { AppEnv } from "./types";
+import { canonicalRedirect } from "./routing";
+import type { AppBindings, AppEnv } from "./types";
 
 export const app = new Hono<AppEnv>();
 app.use(
@@ -103,7 +104,25 @@ app.onError((error, c) => {
 });
 
 export default {
-  fetch: app.fetch,
+  async fetch(
+    request: Request,
+    env: AppBindings,
+    ctx?: ExecutionContext,
+  ): Promise<Response> {
+    const redirect = canonicalRedirect(request, env);
+    if (redirect) return redirect;
+    const { pathname } = new URL(request.url);
+    if (pathname === "/api" || pathname.startsWith("/api/"))
+      return app.fetch(request, env, ctx);
+    // With run_worker_first enabled, pages/assets still use Cloudflare's
+    // configured SPA fallback and security/cache headers through this binding.
+    if (!["GET", "HEAD"].includes(request.method))
+      return new Response("Method not allowed.", {
+        status: 405,
+        headers: { Allow: "GET, HEAD", "Cache-Control": "no-store" },
+      });
+    return env.ASSETS.fetch(request);
+  },
   async scheduled(_controller: ScheduledController, env: Env): Promise<void> {
     // Expiring credentials and throttle records never need long-term retention.
     await env.DB.batch([
