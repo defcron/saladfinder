@@ -1,3 +1,12 @@
+## 2026-11-04 live Stripe credential setup
+
+- Verified the lowercase `saladfinder` organization and selected its enabled Canadian member account. The organization itself is not the payment account.
+- After operator-approved key creation and operator-completed authentication, installed the restricted production credential as encrypted `STRIPE_SECRET_KEY` on the production Worker.
+- Created the active platform snapshot webhook at `https://saladfinder.com/api/webhooks/stripe`, using API version `2026-10-28.endive` and the 11 Checkout, refund and dispute events documented in [STRIPE.md](STRIPE.md). Installed its encrypted `STRIPE_WEBHOOK_SECRET`. Cloudflare secret-name inventory independently confirmed both bindings; secret values are not retained in tracked files.
+- The operator explicitly approved the displayed Connect liability acknowledgement and Radar fees; the acknowledgement was checked and Continue submitted. Completion of the remaining Connect wizard is not yet verified.
+- Opened the member account's linked-bank-account settings for the operator to update directly. No bank details were changed by the agent.
+- `STRIPE_CONNECT_WEBHOOK_SECRET`, connected-account payout destination setup and provider acceptance remain outstanding. Production remains `LAUNCH_MODE=preview`. No live payment, transfer, refund or payout was performed. An active webhook configuration is not evidence of a successful webhook delivery.
+
 ## 2026-11-04 Sites frontend migration
 
 - Public Sites project `appgprj_6aebb054ec9081918311eca3ede0063e`, version 1, published successfully at https://saladfinder.defcron.chatgpt.site.
@@ -6,7 +15,7 @@
 - Deploy-first validation, as requested: initial `/index.html` request encountered Sites' 307 redirect; gateway corrected to request `/` and redeployed. Live root/sign-in return 200 with `X-SaladFinder-Frontend: sites`; API health returns 200; missing static assets return 404.
 - `npm run check`, `npm run coverage` (166 tests, 93.22% lines), and `npm run test:e2e` (18 tests) passed. Focused gateway regression rerun passed after the root-path correction.
 - Browser plugin not available; regular Playwright checked the canonical live host at 1440px and 390px: meaningful content, all brand images decoded, no horizontal overflow, sign-in and unknown-route recovery, and no JavaScript page errors. The pre-existing blocked Cloudflare analytics beacon remains separate from app functionality. Direct Sites-origin visits redirect to the canonical domain.
-- Production remains preview. Operator reports Stripe activation complete; live Worker secret-name inspection shows Stripe credentials/webhook signing secrets are not installed yet. No live payment, transfer or payout was made.
+- At the time of this frontend migration, production remained preview and Stripe credentials were not yet installed; the later credential setup is recorded above. No live payment, transfer or payout was made.
 
 # Brand integration — 2026-11-04
 

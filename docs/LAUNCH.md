@@ -2,7 +2,7 @@
 
 SaladFinder is an Ontario/CAD local-services marketplace. The listings pilot uses `LISTINGS_ENABLED=true` with `LAUNCH_MODE=preview`: verified users can post, apply, withdraw applications, cancel their open listings and report issues. Hiring, starting work, private work messages, milestone progression, Checkout and payouts remain blocked. Pilot listings must not invite people to start work before bookings open.
 
-The operator reported Stripe verification and payment activation complete on 2026-11-04. Production still requires installation of the live API credential and both webhook signing secrets, plus provider acceptance. The production secret-name inventory at the Sites migration contained only `ADMIN_EMAILS` and `TURNSTILE_SECRET_KEY`. Keep `LAUNCH_MODE=preview` until the paid-launch checklist below is complete. [VERIFICATION.md](VERIFICATION.md) distinguishes the checked-in release, actual deployment and provider evidence.
+The operator reported Stripe verification and payment activation complete on 2026-11-04. The restricted live API credential and platform webhook signing secret are now installed as encrypted production Worker secrets for the enabled Canadian account inside the `saladfinder` organization. The connected-account payout webhook secret, remaining Connect configuration and provider acceptance are still outstanding. The operator approved the Connect responsibility acknowledgement; completing its wizard is a separate step. Keep `LAUNCH_MODE=preview` until the paid-launch checklist below is complete. [VERIFICATION.md](VERIFICATION.md) distinguishes configuration, deployment and provider evidence.
 
 ## 1. Establish the business
 
