@@ -10,7 +10,7 @@ The initial categories are cleaning, yard work, moving help, furniture assembly 
 
 ## 2. Set up transactional sign-in email
 
-Configure a verified sending domain, `EMAIL_FROM`, `SUPPORT_EMAIL`, and an administrator's verified email in `ADMIN_EMAILS`. Install the provider secret with `npx wrangler secret put RESEND_API_KEY`. Never paste secrets into issues, commits or chat. Only transactional login emails are sent by the application; waitlist consent is recorded without sending a campaign.
+Follow [EMAIL.md](EMAIL.md) to configure Cloudflare Email Sending with a restricted native binding, or select the supported Resend alternative. Keep `EMAIL_PROVIDER=disabled` until the sending domain is verified. Configure `EMAIL_FROM`, a working `SUPPORT_EMAIL`, and an administrator's verified email in `ADMIN_EMAILS`. Resend configurations require installing `RESEND_API_KEY` through Wrangler's secure secret prompt. Never paste secrets into issues, commits or chat. Only transactional login emails are sent by the application; waitlist consent is recorded without sending a campaign.
 
 Verify SPF/DKIM/DMARC and delivery using a mailbox you control. A generic API response is not delivery evidence. Keep magic links out of access logs and referrers; the frontend consumes the fragment token and removes it from browser history. Links are single-use and expire after 15 minutes. Production never returns the local development token.
 

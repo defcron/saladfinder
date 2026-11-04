@@ -12,7 +12,7 @@ An Ontario/CAD local-services marketplace built with React, Cloudflare Workers, 
 ## Included
 
 - Responsive job search with category, city and payment-schedule filters. Preview examples are visibly labelled and never inserted as real jobs.
-- Verified email magic-link accounts, profiles, session revocation and data export.
+- Verified email magic-link accounts with Cloudflare Email Sending or Resend, profiles, session revocation and data export. Email remains disabled until provider setup and delivery acceptance; see [email operations](docs/EMAIL.md).
 - Job creation with a server-calculated milestone budget and fee disclosure; applications, single-worker hiring, private job messages, submissions, approvals, reports and reviews.
 - Stripe Accounts v2 hosted onboarding, hosted Checkout destination charges, balances and eligible payout requests; durable operation records and signed, replay-safe webhook reconciliation.
 - Administrator reports, suspension, payment incidents and full refunds.

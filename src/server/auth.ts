@@ -5,6 +5,7 @@ import { HTTPException } from "hono/http-exception";
 import { z } from "zod";
 import type { AppEnv, UserRow } from "./types";
 import { POLICY_VERSION, type User } from "../shared/types";
+import { isSignInReady, sendSignInEmail } from "./email";
 import {
   audit,
   digest,
@@ -54,7 +55,7 @@ export const auth = new Hono<AppEnv>();
 auth.post("/auth/request", async (c) => {
   const body = await jsonInput(c, authRequest);
   const local = isLocal(c.env, c.req.url);
-  if (!local && (!c.env.RESEND_API_KEY || !c.env.EMAIL_FROM))
+  if (!isSignInReady(c.env, c.req.url))
     throw new HTTPException(503, {
       message:
         "Email sign-in is being set up. Please join early access for launch updates.",
@@ -86,21 +87,8 @@ auth.post("/auth/request", async (c) => {
   const url = `${new URL(c.env.APP_URL).origin}/auth/verify#token=${token}`;
   let delivered = false;
   try {
-    const response = await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${c.env.RESEND_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        from: c.env.EMAIL_FROM,
-        to: [body.email],
-        subject: "Your SaladFinder sign-in link",
-        text: `Sign in to SaladFinder using this link: ${url}\n\nThis link expires in 15 minutes and can be used once. If you did not request it, you can ignore this email. Never share this link.\n\nSaladFinder`,
-      }),
-      signal: AbortSignal.timeout(10000),
-    });
-    delivered = response.ok;
+    await sendSignInEmail(c.env, body.email, url);
+    delivered = true;
   } catch {
     delivered = false;
   }

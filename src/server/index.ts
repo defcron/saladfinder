@@ -7,6 +7,7 @@ import { auth, loadUser } from "./auth";
 import { marketplace } from "./marketplace";
 import { isLocal, originGuard } from "./middleware";
 import { payments } from "./payments";
+import { isSignInReady } from "./email";
 import type { AppEnv } from "./types";
 
 export const app = new Hono<AppEnv>();
@@ -47,14 +48,7 @@ app.get("/api/config", (c) =>
     launchMode: c.env.LAUNCH_MODE,
     currency: "CAD",
     region: "Ontario",
-    authReady:
-      isLocal(c.env, c.req.url) ||
-      Boolean(
-        c.env.RESEND_API_KEY &&
-        c.env.EMAIL_FROM &&
-        c.env.TURNSTILE_SECRET_KEY &&
-        c.env.TURNSTILE_SITE_KEY,
-      ),
+    authReady: isSignInReady(c.env, c.req.url),
     paymentsReady:
       c.env.LAUNCH_MODE === "live" &&
       Boolean(

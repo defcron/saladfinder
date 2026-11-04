@@ -24,6 +24,15 @@ Combined coverage after source formatting: **88.87% statements, 80.47% branches,
 
 The regression suite covers account/session/token authorization, one-use links, production development-token rejection, Turnstile hostname/action checks, CSRF, atomic concurrent hiring, private-data separation, suspended accounts, reports/moderation, owner-only milestones, immutable/idempotent payment attempts, duplicate/reordered events, refund-before-payment ordering, insufficient or ineligible payouts, ambiguous-operation retries and admin access.
 
+## Cloudflare email preparation — 2026-11-04
+
+- Added optional native Cloudflare Email Sending alongside Resend, with explicit provider selection and shared readiness checks. All deployment configurations set `EMAIL_PROVIDER=disabled` pending domain activation and actual provider delivery acceptance.
+- Added 15 provider/authentication integration cases. `npm run check`, `npm run coverage`, `npm run test:e2e`, binding-type validation, formatting and deployment dry run passed: 70 backend tests and 8 browser tests. Combined coverage: 89.28% statements, 81.48% branches, 92.07% functions, 90.92% lines.
+- Direct deployment succeeded with Worker version `38854373-1704-4511-a107-b54a4e23f03d` and 30 ms startup. Live health remains OK/preview, authentication and payments readiness remain false, and a production sign-in attempt returns 503 before sending email or creating a token.
+- Preserved the user-confirmed legacy `kycaml` CNAME in the pending DNS zone, configured Full (strict), minimum TLS 1.2 and HTTPS redirection, and enabled DMARC aggregate reporting with an initial monitoring policy. These zone settings do not establish authoritative DNS activation or issued certificates.
+- Provider verification was requested for the operator-designated forwarding inbox. Incoming routing, sender onboarding, signed-message/header acceptance and custom-domain TLS are still pending. Cloudflare rejected sender onboarding with `Active zone required`.
+- The preserved legacy Google-hosted service independently presents an expired certificate and HTTP 503. Its existing routing is preserved; that hosting failure was not introduced by this change.
+
 ## SaladFinder rename release — 2026-11-04
 
 - Product branding, browser title/metadata, accessible navigation labels, emails, fee labels, exports and current documentation now use SaladFinder.

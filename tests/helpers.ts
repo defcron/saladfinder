@@ -5,9 +5,9 @@ import { HTTPException } from "hono/http-exception";
 import { auth, loadUser } from "../src/server/auth";
 import { marketplace } from "../src/server/marketplace";
 import { originGuard } from "../src/server/middleware";
-import type { AppEnv } from "../src/server/types";
+import type { AppBindings, AppEnv } from "../src/server/types";
 
-export async function makeTestEnv(overrides: Partial<Env> = {}) {
+export async function makeTestEnv(overrides: Partial<AppBindings> = {}) {
   const mf = new Miniflare(
     convertV4MiniflareOptions({
       workers: [
@@ -23,6 +23,7 @@ export async function makeTestEnv(overrides: Partial<Env> = {}) {
             APP_URL: "http://localhost",
             LAUNCH_MODE: "preview",
             EMAIL_FROM: "",
+            EMAIL_PROVIDER: "resend",
             SUPPORT_EMAIL: "",
             ADMIN_EMAILS: "operator@example.test",
             TURNSTILE_SITE_KEY: "",
@@ -31,7 +32,7 @@ export async function makeTestEnv(overrides: Partial<Env> = {}) {
       ],
     }),
   );
-  const env = await mf.getBindings<Env>("test");
+  const env = await mf.getBindings<AppBindings>("test");
   Object.assign(env, overrides);
   const names = (await readdir(new URL("../migrations/", import.meta.url)))
     .filter((n) => n.endsWith(".sql"))
@@ -65,7 +66,7 @@ export function testApp() {
 }
 export function request(
   app: Hono<AppEnv>,
-  env: Env,
+  env: AppBindings,
   path: string,
   method = "GET",
   body?: unknown,
@@ -87,7 +88,7 @@ export function request(
 }
 export async function login(
   app: Hono<AppEnv>,
-  env: Env,
+  env: AppBindings,
   email: string,
   name = "Test Member",
 ) {
