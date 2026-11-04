@@ -36,7 +36,11 @@ app.use("/api/*", originGuard);
 app.use("/api/*", loadUser);
 app.get("/api/health", async (c) => {
   await c.env.DB.prepare("SELECT 1").first();
-  return c.json({ status: "ok", service: "daywork", mode: c.env.LAUNCH_MODE });
+  return c.json({
+    status: "ok",
+    service: "saladfinder",
+    mode: c.env.LAUNCH_MODE,
+  });
 });
 app.get("/api/config", (c) =>
   c.json({

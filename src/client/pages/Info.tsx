@@ -108,7 +108,7 @@ export function Waitlist() {
             ? "You’re in control of your signup. Use your private link to remove it at any time."
             : joined
               ? "Thanks for your interest. We’re preparing the marketplace before opening real jobs and payments."
-              : "Be first to hear when Daywork opens near you. Tell us a little about what you’re looking for."}
+              : "Be first to hear when SaladFinder opens near you. Tell us a little about what you’re looking for."}
         </p>
       </PageHeading>
       <ActionFeedback {...action} />
@@ -116,7 +116,8 @@ export function Waitlist() {
         <div className="form-stack">
           <p>
             Removing your signup deletes your email, city, and interest from the
-            early-access list. It does not delete a separate Daywork account.
+            early-access list. It does not delete a separate SaladFinder
+            account.
           </p>
           {removalToken ? (
             <button
@@ -133,7 +134,7 @@ export function Waitlist() {
             </Alert>
           )}
           <Link to="/" className="text-link">
-            Back to Daywork <ArrowRight size={17} />
+            Back to SaladFinder <ArrowRight size={17} />
           </Link>
         </div>
       ) : joined ? (
@@ -235,9 +236,10 @@ export function Waitlist() {
           <label className="choice consent">
             <input type="checkbox" required />
             <span>
-              I’m 18 or older and agree to be contacted about Daywork’s Ontario
-              launch. I’ve read the <Link to="/privacy">Privacy notice</Link>{" "}
-              and can withdraw using my private removal link.
+              I’m 18 or older and agree to be contacted about SaladFinder’s
+              Ontario launch. I’ve read the{" "}
+              <Link to="/privacy">Privacy notice</Link> and can withdraw using
+              my private removal link.
             </span>
           </label>
           <Turnstile
@@ -304,7 +306,7 @@ export function Pricing() {
             </li>
             <li>
               <CircleCheck size={20} />
-              Daywork’s fee is added to the client’s total.
+              SaladFinder’s fee is added to the client’s total.
             </li>
             <li>
               <CircleCheck size={20} />
@@ -351,7 +353,7 @@ export function Pricing() {
               <dd>{money(worker)}</dd>
             </div>
             <div>
-              <dt>Daywork service fee</dt>
+              <dt>SaladFinder service fee</dt>
               <dd>{money(fee)}</dd>
             </div>
             <div className="total">
@@ -461,9 +463,9 @@ export function HowItWorks() {
           </li>
         </ol>
         <Alert kind="info">
-          Daywork does not guarantee same-day bank arrival, wages, employment,
-          or advance funding. Work is not prepaid or held in escrow. A client’s
-          approval does not itself move money.
+          SaladFinder does not guarantee same-day bank arrival, wages,
+          employment, or advance funding. Work is not prepaid or held in escrow.
+          A client’s approval does not itself move money.
         </Alert>
         <a
           className="text-link"
@@ -545,8 +547,8 @@ export function InfoPage({ kind }: { kind: "trust" | "terms" | "privacy" }) {
           <p>
             Stripe verifies payment-account information for its own
             requirements. That is not a background check, skills certification,
-            reference check, or guarantee of safety. Daywork does not currently
-            provide insurance or certify workers.
+            reference check, or guarantee of safety. SaladFinder does not
+            currently provide insurance or certify workers.
           </p>
           <h2>Keep payments and sensitive details where they belong.</h2>
           <p>
@@ -566,11 +568,11 @@ export function InfoPage({ kind }: { kind: "trust" | "terms" | "privacy" }) {
           <h2>Raise a problem early.</h2>
           <p>
             Signed-in participants can report a job from its detail page. A
-            participant’s report pauses new payments requested through Daywork
-            while the matter is reviewed. It does not freeze funds already with
-            Stripe or stop previously scheduled payouts. A report is not a
-            promise of a refund. If you’re in immediate danger, stop work and
-            contact local emergency services.
+            participant’s report pauses new payments requested through
+            SaladFinder while the matter is reviewed. It does not freeze funds
+            already with Stripe or stop previously scheduled payouts. A report
+            is not a promise of a refund. If you’re in immediate danger, stop
+            work and contact local emergency services.
           </p>
           <Contact />
         </>
@@ -578,16 +580,16 @@ export function InfoPage({ kind }: { kind: "trust" | "terms" | "privacy" }) {
         <>
           <Alert kind="info">
             {config?.launchMode === "preview"
-              ? "Daywork is in prelaunch preview. Example listings cannot be booked, and real payments are disabled."
+              ? "SaladFinder is in prelaunch preview. Example listings cannot be booked, and real payments are disabled."
               : "Read the job agreement and payment total before accepting work or making a payment."}
           </Alert>
           <h2>Who this preview is for</h2>
           <p>
-            Daywork is a project maintained by defcron for an initial Ontario,
-            Canada launch. You must be at least 18. These terms cover browsing
-            the preview and joining early access. The operator’s legal identity,
-            support process, and final transaction terms must be published
-            before paid jobs open.
+            SaladFinder is a project maintained by defcron for an initial
+            Ontario, Canada launch. You must be at least 18. These terms cover
+            browsing the preview and joining early access. The operator’s legal
+            identity, support process, and final transaction terms must be
+            published before paid jobs open.
           </p>
           <h2>Early access</h2>
           <p>
@@ -607,10 +609,10 @@ export function InfoPage({ kind }: { kind: "trust" | "terms" | "privacy" }) {
           <h2>How the planned marketplace works</h2>
           <p>
             Clients and workers agree on the scope, worker pay, and milestones.
-            Workers submit completed work; clients approve and pay. Daywork’s
-            proposed service fee is 12% plus $1 CAD per milestone, with a $3 CAD
-            minimum, charged to the client. Payment and payout processing is
-            provided by Stripe under its applicable terms.
+            Workers submit completed work; clients approve and pay.
+            SaladFinder’s proposed service fee is 12% plus $1 CAD per milestone,
+            with a $3 CAD minimum, charged to the client. Payment and payout
+            processing is provided by Stripe under its applicable terms.
           </p>
           <p>
             Approval is not payment. Payment is not confirmation that a bank has

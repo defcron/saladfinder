@@ -507,7 +507,7 @@ marketplace.post("/waitlist", async (c) => {
     {
       ok: true,
       message:
-        "You are on the early-access list. We will email you when Daywork opens in your area.",
+        "You are on the early-access list. We will email you when SaladFinder opens in your area.",
       ...(inserted.meta.changes ? { removalToken } : {}),
     },
     201,

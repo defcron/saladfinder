@@ -71,7 +71,7 @@ auth.post("/auth/request", async (c) => {
     .bind(
       tokenHash,
       body.email,
-      body.name || "Daywork member",
+      body.name || "SaladFinder member",
       body.role,
       now + 900,
       now,
@@ -95,8 +95,8 @@ auth.post("/auth/request", async (c) => {
       body: JSON.stringify({
         from: c.env.EMAIL_FROM,
         to: [body.email],
-        subject: "Your Daywork sign-in link",
-        text: `Sign in to Daywork using this link: ${url}\n\nThis link expires in 15 minutes and can be used once. If you did not request it, you can ignore this email. Never share this link.\n\nDaywork`,
+        subject: "Your SaladFinder sign-in link",
+        text: `Sign in to SaladFinder using this link: ${url}\n\nThis link expires in 15 minutes and can be used once. If you did not request it, you can ignore this email. Never share this link.\n\nSaladFinder`,
       }),
       signal: AbortSignal.timeout(10000),
     });
@@ -229,7 +229,10 @@ auth.get("/me/export", requireUser, async (c) => {
       "SELECT id,job_id,reason,status,resolution,created_at FROM reports WHERE reporter_id=?",
     ).bind(user.id),
   ]);
-  c.header("Content-Disposition", 'attachment; filename="daywork-data.json"');
+  c.header(
+    "Content-Disposition",
+    'attachment; filename="saladfinder-data.json"',
+  );
   return c.json({
     exportedAt: new Date().toISOString(),
     user,

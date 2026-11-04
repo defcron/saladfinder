@@ -1,4 +1,4 @@
-# Daywork API
+# SaladFinder API
 
 All routes are under `/api`. Amounts are integer CAD cents. Mutation requests use JSON and the application's exact `Origin`; cross-site mutations are rejected. The local-only development configuration additionally permits loopback origins on ports 5173, 8787 and 8788 for the Vite proxy. Responses containing private data are never cached.
 

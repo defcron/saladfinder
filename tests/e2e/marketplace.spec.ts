@@ -51,7 +51,7 @@ test("public navigation, fee calculator, accessibility and responsive layout", a
     page.getByRole("heading", { name: "From completed work to your bank." }),
   ).toBeVisible();
   await expect(
-    page.getByText("Daywork does not guarantee same-day bank arrival", {
+    page.getByText("SaladFinder does not guarantee same-day bank arrival", {
       exact: false,
     }),
   ).toBeVisible();

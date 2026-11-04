@@ -40,7 +40,7 @@ export const requireLive = createMiddleware<AppEnv>(async (c, next) => {
   if (c.env.LAUNCH_MODE !== "live" && !isLocal(c.env, c.req.url)) {
     throw new HTTPException(503, {
       message:
-        "Daywork is in preview. Join early access to hear when bookings open.",
+        "SaladFinder is in preview. Join early access to hear when bookings open.",
     });
   }
   await next();

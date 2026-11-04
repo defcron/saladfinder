@@ -1,6 +1,6 @@
-# Daywork design system
+# SaladFinder design system
 
-Primary reference: `daywork-concept.png`, generated before implementation. The full find-work screen is the reference; other transactional screens extend its typography, colour, spacing, and control language.
+Primary reference: `daywork-concept.png`, generated before implementation under the original Daywork working title. The current wordmark is SaladFinder; the historical reference image is retained unchanged. The full find-work screen is the reference; other transactional screens extend its typography, colour, spacing, and control language.
 
 - Background #f7f6f2, ink and primary actions #173e32, lime notice/accent #d4ec97, dividers #c9ccc5, muted text #616762.
 - Georgia bold for display headings, job titles, wordmark and primary actions. Arial/Helvetica for labels, body text and compact status information. Display heading 70px maximum; body 17px; labels 16px; notes 14px.

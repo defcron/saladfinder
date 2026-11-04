@@ -18,7 +18,7 @@ export function Logo({ small = false }: { small?: boolean }) {
       <svg viewBox="0 0 48 36" aria-hidden="true">
         <path d="M0 26h12V16h12V6h18v9H30v10H18v10H0z" fill="currentColor" />
       </svg>
-      <span>Daywork</span>
+      <span>SaladFinder</span>
     </span>
   );
 }
@@ -47,7 +47,7 @@ export function Layout({ children }: { children: ReactNode }) {
         Skip to content
       </a>
       <header className="site-header">
-        <Link className="brand-link" to="/" aria-label="Daywork home">
+        <Link className="brand-link" to="/" aria-label="SaladFinder home">
           <Logo />
         </Link>
         <button
@@ -105,7 +105,7 @@ export function Layout({ children }: { children: ReactNode }) {
         {children}
       </main>
       <footer className="site-footer">
-        <Link to="/" className="brand-link" aria-label="Daywork home">
+        <Link to="/" className="brand-link" aria-label="SaladFinder home">
           <Logo small />
         </Link>
         <nav aria-label="Footer navigation">

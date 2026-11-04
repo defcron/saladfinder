@@ -1,10 +1,10 @@
 # Operator launch runbook
 
-Daywork is an Ontario/CAD local-services marketplace. The checked-in deployment deliberately starts with `LAUNCH_MODE=preview`. Deploying code does not activate a payments business. Complete the external setup and acceptance below before changing that flag.
+SaladFinder is an Ontario/CAD local-services marketplace. The checked-in deployment deliberately starts with `LAUNCH_MODE=preview`. Deploying code does not activate a payments business. Complete the external setup and acceptance below before changing that flag.
 
 ## 1. Establish the business
 
-Choose and clear the business name (Daywork is a working name, not a trademark clearance), legal operator, service area, support email and privacy contact. Review the terms/privacy text against your real business. Decide worker classification, insurance, provincial licensing and CRA platform reporting. Assess GST/HST treatment of both the worker service and the platform service. Read [research.md](research.md) for official sources and unresolved questions. The application does not collect SINs or file CRA platform returns.
+The selected product name is SaladFinder and the operator owns `saladfinder.com`. Complete business-name clearance and registration, and establish the legal operator, service area, support email and privacy contact. Domain ownership and this branding change are not trademark clearance. Review the terms/privacy text against your real business. Decide worker classification, insurance, provincial licensing and CRA platform reporting. Assess GST/HST treatment of both the worker service and the platform service. Read [research.md](research.md) for official sources and unresolved questions. The application does not collect SINs or file CRA platform returns.
 
 The initial categories are cleaning, yard work, moving help, furniture assembly and general help. Prohibit licensed trades, dangerous work, delivery, courier, ride-share, adult services and employment-placement listings until there is a specific supported workflow and review. A marketplace label alone does not establish legal classification.
 
@@ -39,7 +39,7 @@ npm run db:remote
 npx wrangler deploy
 ```
 
-The configuration binds one D1 database and serves the Vite output from Workers Static Assets. Static paths have browser security headers; API paths have their own no-store/security headers. Turnstile is restricted to the deployment hostname. If you move to a custom domain, update `APP_URL`, Turnstile allowed hostnames, Stripe return/webhook URLs and links together, and rerun acceptance.
+The configuration binds one D1 database and serves the Vite output from Workers Static Assets. Static paths have browser security headers; API paths have their own no-store/security headers. Turnstile is restricted to the deployment hostname. The SaladFinder domain is prepared but not connected; see [domain connection](DOMAIN.md). When moving to the custom domain, update `APP_URL`, Turnstile allowed hostnames, Stripe return/webhook URLs and links together, and rerun acceptance.
 
 GitHub's manual Deploy workflow expects a scoped `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` in the production environment. Never upload a personal Wrangler OAuth session as a CI secret. Restrict production deployment access and enable GitHub account 2FA. The ordinary CI workflow needs no cloud or payment secrets.
 

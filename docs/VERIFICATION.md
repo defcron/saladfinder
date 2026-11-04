@@ -24,13 +24,24 @@ Combined coverage after source formatting: **88.87% statements, 80.47% branches,
 
 The regression suite covers account/session/token authorization, one-use links, production development-token rejection, Turnstile hostname/action checks, CSRF, atomic concurrent hiring, private-data separation, suspended accounts, reports/moderation, owner-only milestones, immutable/idempotent payment attempts, duplicate/reordered events, refund-before-payment ordering, insufficient or ineligible payouts, ambiguous-operation retries and admin access.
 
-## Cloudflare deployment
+## SaladFinder rename release — 2026-11-04
+
+- Product branding, browser title/metadata, accessible navigation labels, emails, fee labels, exports and current documentation now use SaladFinder.
+- Public MIT repository renamed to <https://github.com/defcron/saladfinder>; GitHub resolves the previous `defcron/daywork` repository address to it.
+- Existing Worker/D1 names, cookies, Stripe metadata and waitlist-removal storage key were retained. No production records or secrets were migrated or exported.
+- The longer wordmark exposed header overflow at intermediate widths. Only header breakpoints were adjusted: compact desktop through 1350px, disclosure navigation through 960px. A focused header fixture passed 68 combinations across 17 widths, authentication states and menu states.
+- `npm run check`, `npm run coverage`, `npm run test:e2e`, generated binding-type validation, deployment dry run, changed-file formatting and whitespace checks passed. All 55 backend tests and 8 browser tests passed; coverage remained 88.87% statements, 80.47% branches, 91.75% functions and 90.46% lines.
+- Direct Wrangler deployment succeeded with version `f0c49b85-e369-4d77-a74d-91c88b155d47`; startup measured 35 ms. The Worker still serves <https://daywork.defcronyke.workers.dev> in preview mode.
+- Live Chromium acceptance at 1440px, 850px and 390px observed HTTP 200, SaladFinder title/wordmark, visible preview notice, working responsive menu, no horizontal overflow and no console/page errors. Desktop/mobile screenshots were visually inspected. `/api/health` returns `service: "saladfinder"`; live config still reports `authReady=false` and `paymentsReady=false`.
+- The owner supplied `saladfinder.com`, registered at Netfirms. A free Cloudflare DNS zone was prepared and 14 discovered records imported, but its nameserver activation and Worker custom-domain attachment are pending. The existing Turnstile widget now allows the intended domain. See [domain connection](DOMAIN.md) for the exact state and remaining steps.
+
+## Initial Daywork preview deployment
 
 - App: https://daywork.defcronyke.workers.dev
 - Worker: `daywork`; one dedicated D1 database, two migrations applied.
 - Mode: **preview**. `authReady=false` and `paymentsReady=false` are intentional and observed.
 - Initial code version: `36b47b1a-4815-4fe9-9bb1-28e65edac343`.
-- Active version after installing the Turnstile secret: `a6d0ad97-95eb-4a0e-a391-f74d4a4842a9`.
+- Initial version after installing the Turnstile secret: `a6d0ad97-95eb-4a0e-a391-f74d4a4842a9`.
 - Worker startup measured by deployment: 27 ms.
 - Daily cleanup trigger: `17 4 * * *` UTC.
 - No live jobs seeded. `/api/jobs` returns an empty real database; the visible examples are separate, labelled client-side illustrations.
@@ -50,7 +61,7 @@ Inspected comparison points: headline/navigation/CTA copy; two-column filter/lis
 - No actual Stripe sandbox account, hosted onboarding, test charge/refund, Connect approval, live charge or bank payout. Provider fixtures cannot establish these.
 - No live transactional sign-in email delivery. No sending domain was configured in the connected Cloudflare account; the current integration has a documented verified-email provider setup path.
 - No business registration, name/trademark clearance, approved legal/tax/insurance decision, CRA reporting implementation, staffed support contact, or final transaction policies.
-- No custom domain purchased or attached.
+- The owner already owns `saladfinder.com`; its Cloudflare DNS zone is prepared, but no custom domain is attached to the Worker yet.
 - No Cloudflare deployment token installed in GitHub. The app was deployed through the owner's existing local Wrangler authorization; the included manual GitHub deploy workflow requires a separate scoped token.
 - No full browser matrix, screen-reader audit, sustained load test, penetration test, independent bank-receipt evidence, automated dispute-evidence submission, or external on-call alerting service.
 - No revenue, user demand or profitability has been demonstrated.

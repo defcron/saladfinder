@@ -14,7 +14,7 @@ function App() {
   return (
     <Layout>
       {loading ? (
-        <Loading label="Getting Daywork ready…" />
+        <Loading label="Getting SaladFinder ready…" />
       ) : error ? (
         <div className="page-wrap narrow">
           <Alert>{error}</Alert>

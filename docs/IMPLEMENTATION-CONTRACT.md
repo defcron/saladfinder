@@ -1,4 +1,4 @@
-# Daywork implementation contract
+# SaladFinder implementation contract
 
 Ontario / CAD. Production private preview until operator configures live payments, verified mail, terms and business. Do not imply all workers get same-day bank arrival.
 

@@ -19,7 +19,7 @@ describe("assembled Worker", () => {
     expect(response.status).toBe(200);
     expect(await response.json()).toMatchObject({
       status: "ok",
-      service: "daywork",
+      service: "saladfinder",
     });
     expect(response.headers.get("cache-control")).toBe("no-store");
     expect(response.headers.get("x-content-type-options")).toBe("nosniff");

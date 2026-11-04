@@ -296,7 +296,7 @@ export function PostJob() {
               <dd>{money(budget)}</dd>
             </div>
             <div>
-              <dt>Daywork fee</dt>
+              <dt>SaladFinder fee</dt>
               <dd>{money(fees)}</dd>
             </div>
             <div className="total">

@@ -1502,7 +1502,7 @@ th {
     font-size: 21px;
   }
 }
-@media (max-width: 1250px) {
+@media (max-width: 1350px) {
   .site-header {
     gap: 38px;
   }
@@ -1522,6 +1522,11 @@ th {
     font-size: 18px;
     padding: 11px 19px;
   }
+  .logout-button {
+    display: none;
+  }
+}
+@media (max-width: 1250px) {
   .hero {
     grid-template-columns: minmax(0, 1fr) 320px;
     gap: 28px;
@@ -1590,9 +1595,6 @@ th {
   }
   .account-layout {
     gap: 50px;
-  }
-  .logout-button {
-    display: none;
   }
 }
 @media (max-width: 1000px) {
@@ -1728,7 +1730,7 @@ th {
     gap: 24px;
   }
 }
-@media (max-width: 800px) {
+@media (max-width: 960px) {
   .site-header {
     min-height: 75px;
     position: relative;
@@ -1775,6 +1777,8 @@ th {
   .logout-button {
     display: inline-flex;
   }
+}
+@media (max-width: 800px) {
   .page-wrap {
     padding-top: 32px;
   }

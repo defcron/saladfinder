@@ -1,5 +1,5 @@
 {
-  "name": "daywork",
+  "name": "saladfinder",
   "version": "0.1.0",
   "description": "Ontario local-work marketplace with milestone payments on Cloudflare Workers and Stripe Connect",
   "scripts": {
@@ -50,6 +50,6 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/defcron/daywork.git"
+    "url": "https://github.com/defcron/saladfinder.git"
   }
 }

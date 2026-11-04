@@ -320,7 +320,7 @@ export function Account() {
               <a
                 className="button button-outline"
                 href="/api/me/export"
-                download="daywork-data.json"
+                download="saladfinder-data.json"
               >
                 Download my data
               </a>
@@ -380,7 +380,7 @@ export function Account() {
                       </h3>
                       <p>
                         {status.message ||
-                          "Stripe collects and verifies your payment details. Daywork never stores your bank or card credentials."}
+                          "Stripe collects and verifies your payment details. SaladFinder never stores your bank or card credentials."}
                       </p>
                     </div>
                   </div>
@@ -492,7 +492,7 @@ export function Account() {
                             {method === "instant"
                               ? "For supported Canadian debit cards. Stripe usually delivers eligible instant payouts within 30 minutes; delays can occur."
                               : "Standard payouts follow Stripe’s settlement schedule and your bank’s processing time."}{" "}
-                            Daywork adds no worker payout fee.
+                            SaladFinder adds no worker payout fee.
                           </p>
                           {attempt && (
                             <p className="small-text">

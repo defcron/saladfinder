@@ -1,11 +1,12 @@
-# Daywork
+# SaladFinder
 
 An Ontario/CAD local-services marketplace built with React, Cloudflare Workers, D1 and Stripe Connect. Customers post jobs, workers apply, and both parties agree on milestones. Customers pay approved milestones through Stripe Checkout; eligible workers can request an Instant Payout. Standard bank payouts remain available according to Stripe's actual timing.
 
 **Launch status: private preview.** Real-money transactions are disabled. A Canadian Stripe Connect account, verified transactional email, reviewed operator details/policies and provider acceptance are required before paid launch. This repository is not evidence that those external steps are complete. See [launch runbook](docs/LAUNCH.md) and [verification record](docs/VERIFICATION.md).
 
 - App: https://daywork.defcronyke.workers.dev
-- Source: https://github.com/defcron/daywork
+- Intended custom domain: `saladfinder.com` ([DNS connection pending at Netfirms](docs/DOMAIN.md))
+- Source: https://github.com/defcron/saladfinder
 - License: [MIT](LICENSE)
 
 ## Included
@@ -51,6 +52,8 @@ Browser tests use an isolated temporary D1 store on port 8788. They do not modif
 
 ## Deploy
 
+The deployed Worker and D1 database retain the internal names `daywork` and `daywork-production` to preserve existing bindings and data. Session cookie names, Stripe metadata keys and the waitlist removal-link storage key also remain compatible with the original preview. These are technical identifiers; the public product is SaladFinder.
+
 The checked-in `wrangler.jsonc` targets the owner's provisioned D1 database. For a fork, create your own D1 database and replace the database ID, APP_URL, widget key and worker name. Keep staging and production databases separate.
 
 ```bash
@@ -65,7 +68,7 @@ Install secrets with `npx wrangler secret put SECRET_NAME`. The public site key 
 
 ## Revenue model and limits
 
-The customer pays a service fee of **12% + CA$1 per milestone**, minimum CA$3, in addition to the worker's agreed gross amount. At the initial CA$25 minimum milestone, the fee is CA$4. Workers have no Daywork platform fee. The initial model absorbs platform Stripe payment/payout fees. Taxes and worker service invoicing require operator configuration/review before launch.
+The customer pays a service fee of **12% + CA$1 per milestone**, minimum CA$3, in addition to the worker's agreed gross amount. At the initial CA$25 minimum milestone, the fee is CA$4. Workers have no SaladFinder platform fee. The initial model absorbs platform Stripe payment/payout fees. Taxes and worker service invoicing require operator configuration/review before launch.
 
 A modelled CA$100 milestone yields about CA$7.17 after the published domestic-card/Connect cost assumptions and active-worker allocation. Support, acquisition, losses, tax and founder labour are excluded; profitability depends on real volume and costs. Details, sensitivities and official sources are in [research](docs/research.md).
 
@@ -73,4 +76,4 @@ A modelled CA$100 milestone yields about CA$7.17 after the published domestic-ca
 
 `src/client` contains the React interface, `src/server` the Hono API, and `src/shared` shared types/fee helpers. `migrations` contains D1 schema versions. Vite builds static assets; Wrangler deploys one Worker with D1 and static-asset bindings. Identity and payment details are collected by Stripe; the app stores only the required provider IDs and operational ledger.
 
-Read [API](docs/API.md), [operations](docs/OPERATIONS.md), [launch](docs/LAUNCH.md), [security](SECURITY.md), and [verification](docs/VERIFICATION.md). Product terms and privacy pages start as prelaunch disclosures, not a claim of legal review. Daywork is a provisional product name.
+Read [API](docs/API.md), [operations](docs/OPERATIONS.md), [launch](docs/LAUNCH.md), [security](SECURITY.md), and [verification](docs/VERIFICATION.md). Product terms and privacy pages start as prelaunch disclosures, not a claim of legal review. SaladFinder is the selected product name; business registration and trademark clearance are still outstanding.

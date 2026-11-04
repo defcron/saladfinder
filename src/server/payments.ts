@@ -550,7 +550,7 @@ export function createPaymentsRouter(
           price_data: {
             currency: "cad",
             unit_amount: attempt.fee_cents,
-            product_data: { name: "Daywork service fee" },
+            product_data: { name: "SaladFinder service fee" },
           },
           quantity: 1,
         },
