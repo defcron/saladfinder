@@ -1,20 +1,20 @@
 # SaladFinder
 
-**Operator-requested pause:** see [the saved project state](docs/PAUSED.md) before continuing deployment or domain setup.
+**Website and email deployment:** the canonical preview is now `www.saladfinder.com`, using the operator-authorized Cloudflare DNS setup. Forwarding and provider sending passed actual delivery checks, and the app's restricted email binding is deployed. Production app-generated sign-in acceptance remains pending. See [the current checkpoint](docs/PAUSED.md).
 
 An Ontario/CAD local-services marketplace built with React, Cloudflare Workers, D1 and Stripe Connect. Customers post jobs, workers apply, and both parties agree on milestones. Customers pay approved milestones through Stripe Checkout; eligible workers can request an Instant Payout. Standard bank payouts remain available according to Stripe's actual timing.
 
-**Launch status: private preview.** Real-money transactions are disabled. A Canadian Stripe Connect account, verified transactional email, reviewed operator details/policies and provider acceptance are required before paid launch. This repository is not evidence that those external steps are complete. See [launch runbook](docs/LAUNCH.md) and [verification record](docs/VERIFICATION.md).
+**Launch status: public preview.** Real-money transactions are disabled. A Canadian Stripe Connect account, app sign-in email acceptance, reviewed operator details/policies and payment-provider acceptance are required before paid launch. This repository is not evidence that those external steps are complete. See [launch runbook](docs/LAUNCH.md) and [verification record](docs/VERIFICATION.md).
 
-- App: https://daywork.defcronyke.workers.dev
-- Intended custom domain: `saladfinder.com` ([DNS connection pending at Netfirms](docs/DOMAIN.md))
+- App: https://www.saladfinder.com
+- Previous Workers and Pages page URLs redirect to the canonical `www` hostname. The apex retains its original hosting record; apex forwarding remains pending ([domain status](docs/DOMAIN.md)).
 - Source: https://github.com/defcron/saladfinder
 - License: [MIT](LICENSE)
 
 ## Included
 
 - Responsive job search with category, city and payment-schedule filters. Preview examples are visibly labelled and never inserted as real jobs.
-- Verified email magic-link accounts with Cloudflare Email Sending or Resend, profiles, session revocation and data export. Email remains disabled until provider setup and delivery acceptance; see [email operations](docs/EMAIL.md).
+- Verified email magic-link accounts with Cloudflare Email Sending or Resend, profiles, session revocation and data export. Cloudflare provider sending and forwarding are verified, and the restricted app email binding is deployed; production app-generated sign-in acceptance remains pending. See [email operations](docs/EMAIL.md).
 - Job creation with a server-calculated milestone budget and fee disclosure; applications, single-worker hiring, private job messages, submissions, approvals, reports and reviews.
 - Stripe Accounts v2 hosted onboarding, hosted Checkout destination charges, balances and eligible payout requests; durable operation records and signed, replay-safe webhook reconciliation.
 - Administrator reports, suspension, payment incidents and full refunds.

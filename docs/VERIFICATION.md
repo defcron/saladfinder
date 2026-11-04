@@ -1,8 +1,25 @@
 # Verification record
 
-Verified on **2026-11-04**. This record distinguishes local regression tests, deployed preview checks, and provider acceptance that has not yet occurred.
+Verified on **2026-11-04**. This record distinguishes local regression tests, deployed preview checks, and provider acceptance. The latest release below supersedes the historical deployment snapshots that follow it.
 
-## Implemented and locally verified
+## Cloudflare DNS and email activation — 2026-11-04
+
+- The operator explicitly authorized Cloudflare nameservers for `saladfinder.com`. Netfirms remains the registrar. Its saved nameservers, the `.com` registry and both Cloudflare authoritative servers confirm `maciej.ns.cloudflare.com` and `rihana.ns.cloudflare.com`. Recursive caches still returned mixed old and new answers; global cache expiry is not claimed.
+- Preserved the `kycaml` Google service CNAME, Google verification, original apex/FTP hosting and existing ACME delegation. Replaced the suspended Netfirms mail configuration with Cloudflare receiving MX, SPF and provider-generated DKIM. The apex still points to its original hosting; no new apex redirect was configured.
+- Cloudflare routing reports enabled, ready and synchronized. Seven explicit aliases forward to the verified operator-controlled Workspace destination; catch-all is disabled. The exact destination and private message headers are omitted from the public repository.
+- Actual provider sending from `support@saladfinder.com` reached Workspace with SPF, DKIM and DMARC passing. A separate message to that support alias reached the forwarding destination in approximately seven seconds, with forwarding DKIM and ARC passing. This establishes both mail paths, not an app-generated sign-in or token acceptance.
+- Sending-domain DNS reports ready with no errors. DMARC remains `p=none` monitoring. Provider message-body previews are disabled. The provider SMTP endpoint on port 465 passed normal CA/hostname TLS validation; no mail-client credentials or Gmail “Send mail as” identity were configured.
+- `npm run check`, `npm run coverage` and `npm run test:e2e` passed: **123 automated tests and 8 desktop/mobile browser tests**. Coverage was **89.75% statements, 82.29% branches, 92.30% functions and 91.31% lines**. After the canonical URL update, binding types were regenerated and typechecking and the final Worker dry run passed.
+- The previous GitHub run exposed a fresh-checkout gateway build failure because `.local` did not exist. The gateway build now creates its output parent directory with a portable Node prebuild step; no tests or coverage checks were removed. The corrected build passes both in the workspace and in an isolated copy of the tracked files with no initial `.local` directory, producing the compiled Worker and routes file.
+- Direct Wrangler deployment succeeded with Worker version `7d17b829-58d1-4abe-8a3b-b481c5511230` and 17 ms startup. Production uses `APP_URL=https://www.saladfinder.com`, `EMAIL_PROVIDER=cloudflare` and an `EMAIL` binding restricted to `login@saladfinder.com`. Local/staging mail remain disabled. No database migration or Stripe change was made.
+- Live health, configuration and `/sign-in` returned 200 over validated HTTPS. Configuration reports Ontario/CAD, `authReady=true`, `paymentsReady=false` and the support address. `LAUNCH_MODE=preview` remains in effect.
+- Workers and Pages old-host requests to `/pricing?source=dns-check` returned 308 to the same path/query on `www`. An empty authentication request from the canonical origin reached input validation (400); the same request from a hostile origin was rejected (403). These probes created no account and sent no email.
+- Native Chrome visual inspection confirmed the enabled sign-in form, correct support link and an automatically successful Turnstile widget on `www`. No account details or consent were submitted. A real app-generated sign-in email, successful first use and token reuse rejection remain pending production acceptance; local tests cover the authentication behavior.
+- The Pages custom domain and its Google-issued certificate are active. A separate Cloudflare Universal SSL Let's Encrypt apex/wildcard certificate remains pending validation. These are distinct certificate paths.
+
+The changed configuration and deployment health-check URL are published with this record. Direct deployment, the local suites and live observations are established above; GitHub CI for the resulting commit must be checked separately.
+
+## Initial implementation verification (historical)
 
 | Check                             | Result                                                                                                                                                                                            |
 | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -68,9 +85,9 @@ Inspected comparison points: headline/navigation/CTA copy; two-column filter/lis
 ## Not yet verified or enabled
 
 - No actual Stripe sandbox account, hosted onboarding, test charge/refund, Connect approval, live charge or bank payout. Provider fixtures cannot establish these.
-- No live transactional sign-in email delivery. No sending domain was configured in the connected Cloudflare account; the current integration has a documented verified-email provider setup path.
+- Production app-generated sign-in delivery and first-use/reuse acceptance remain pending. The sending domain, provider delivery and inbound forwarding are now verified as recorded above.
 - No business registration, name/trademark clearance, approved legal/tax/insurance decision, CRA reporting implementation, staffed support contact, or final transaction policies.
-- The owner already owns `saladfinder.com`; its Cloudflare DNS zone is prepared, but no custom domain is attached to the Worker yet.
+- The apex still uses its original hosting and needs verified HTTPS forwarding. The `www` Pages gateway, canonical app URL and Cloudflare DNS delegation are active.
 - No Cloudflare deployment token installed in GitHub. The app was deployed through the owner's existing local Wrangler authorization; the included manual GitHub deploy workflow requires a separate scoped token.
 - No full browser matrix, screen-reader audit, sustained load test, penetration test, independent bank-receipt evidence, automated dispute-evidence submission, or external on-call alerting service.
 - No revenue, user demand or profitability has been demonstrated.

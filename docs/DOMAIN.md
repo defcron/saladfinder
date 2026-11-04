@@ -1,37 +1,49 @@
 # SaladFinder domain connection
 
-**Project paused by the operator.** The later deployment and DNS checkpoint in [PAUSED.md](PAUSED.md) supersedes the preparation status below; do not resume setup without the operator's instruction.
+Status recorded on 2026-11-04: the operator explicitly authorized Cloudflare authoritative DNS for **saladfinder.com**, superseding the earlier Netfirms-nameserver requirement for this domain. Netfirms remains the registrar. The production app is in preview at **https://www.saladfinder.com**, with the canonical `APP_URL` now set to that origin. The [resumption checkpoint](PAUSED.md) records the deployed version and remaining app-generated login acceptance.
 
-Status recorded on 2026-11-04: the owner requires **Netfirms to remain the authoritative DNS provider** for `saladfinder.com`. The production app remains in preview at `https://daywork.defcronyke.workers.dev`; its canonical `APP_URL` has not changed to the custom domain.
+## Current authoritative DNS
 
-## Current authoritative DNS and reversal
+The registrar nameservers, registry delegation and both Cloudflare authoritative nameservers confirm:
 
-A brief change to Cloudflare nameservers was reversed. The registry delegation and subsequent checks through Google Public DNS, Cloudflare DNS and Quad9 returned the original nameservers:
+- `maciej.ns.cloudflare.com`
+- `rihana.ns.cloudflare.com`
 
-- `ns1.netfirms.com`
-- `ns2.netfirms.com`
+The Cloudflare zone is active and authoritative. An earlier brief switch was reversed before the operator later approved this migration; that reversal is no longer the current DNS state. Recursive resolver caches remain mixed. The final check returned Cloudflare nameservers from Google, Cloudflare 1.1.1.1 and Quad9; Google and 1.1.1.1 returned Cloudflare MX records, while Quad9 still returned the old MX. Earlier checks also saw cached Netfirms NS/SPF answers. These observations do not establish uniform global propagation.
 
-The original apex A record is `66.96.160.136`. The existing `kycaml.saladfinder.com CNAME ghs.googlehosted.com` remains in place with TTL 3600. The original root and `www` records, existing Google verification CNAME, and mail records were preserved or restored. Authoritative MX and SPF records have not been replaced for a new email service.
+Current records preserve the following services:
 
-Registrar access is no longer the blocker. The remaining work must support external DNS at Netfirms. Do not change the nameservers again without an explicit change to that requirement.
+| Host or purpose               | Current state                                                                      |
+| ----------------------------- | ---------------------------------------------------------------------------------- |
+| Apex `saladfinder.com`        | Original A record `66.96.160.136`; not the app and no new apex redirect configured |
+| `www`                         | CNAME `saladfinder.pages.dev`; Pages custom domain active                          |
+| `kycaml`                      | CNAME `ghs.googlehosted.com`, TTL 3600; existing Google service route preserved    |
+| Google ownership verification | Existing CNAME preserved                                                           |
+| `ftp`                         | Existing A record preserved                                                        |
+| ACME certificate delegation   | Existing Netfirms delegation preserved                                             |
+| Email                         | Cloudflare receiving and sending records installed; see [email status](EMAIL.md)   |
 
-## Cloudflare state retained during cache expiry
+Obsolete A records for the suspended Netfirms email service were removed: `email`, `imap`, `mail`, both `mx` addresses, `pop`, `smtp`, and `webmail`. No substitute IMAP host was created. The original Cloudflare scan missed `kycaml`; that record was discovered and preserved separately, so the scan must not be treated as a complete backup.
 
-- The Free Website DNS zone activated during the brief delegation change. It is now **undelegated**, even if its dashboard status still says active. Its assigned nameservers are `maciej.ns.cloudflare.com` and `rihana.ns.cloudflare.com`.
-- Both newly attached Worker Custom Domains, `saladfinder.com` and `www.saladfinder.com`, were detached. They are not the app's active production endpoints.
-- The Cloudflare copy of the root and `www` DNS records was restored to the original records for resolvers that still cache the temporary Cloudflare delegation. The legacy `kycaml` CNAME and existing Google verification record are retained there too.
-- **Do not delete the staged Cloudflare zone while cached delegations expire.** Dashboard activation does not prove that Cloudflare currently controls the authoritative public DNS.
-- The initial Cloudflare scan imported 14 records, but it missed `kycaml`. Treat the scan as a partial discovery aid rather than a complete DNS backup.
-- The existing Turnstile widget is named SaladFinder preview and allows the Workers hostname and `saladfinder.com`, including its subdomains. Its secret was retained.
-- No paid plan or domain transfer was ordered. Incoming Cloudflare mail routing and outgoing sending are not enabled. See [email status](EMAIL.md).
+## Website and certificate acceptance
 
-## Proposed connection while keeping Netfirms DNS
+The **saladfinder** Pages gateway is deployed at <https://saladfinder.pages.dev> and forwards requests through a service binding to the existing `daywork` Worker. The provider reports `www.saladfinder.com` and its Google-issued Pages certificate active, and an actual HTTPS GET returned 200 without bypassing certificate checks. The gateway's allowed public hosts are `www.saladfinder.com` and `saladfinder.pages.dev`; deployment-hash and other unknown hosts return 421 before reaching the application.
 
-The next proposed route is a **Cloudflare Pages gateway on `www.saladfinder.com`**, connected using an explicit CNAME at Netfirms. Cloudflare documents support for Pages subdomains with an external DNS provider: associate the custom domain with the Pages project first, then point the subdomain to that project's actual `pages.dev` hostname. This route still needs implementation and end-to-end verification; no Pages gateway activation is claimed here. [Cloudflare Pages custom-domain requirements](https://developers.cloudflare.com/pages/configuration/custom-domains/)
+The gateway passed read-only desktop/mobile checks for deep SPA routes, assets, security headers, filtering, navigation and API protection. Those gateway browser checks occurred before canonical activation. Production Worker version `7d17b829-58d1-4abe-8a3b-b481c5511230` now sets `APP_URL=https://www.saladfinder.com`. Live health/configuration and `/sign-in` return 200; configuration reports authentication ready and payments disabled. Both old Workers and Pages `/pricing?source=dns-check` requests return 308 to the same path and query on `www`.
 
-An apex Pages domain uses different requirements: Cloudflare documents that it requires Cloudflare nameservers. Under the current Netfirms requirement, **an HTTPS redirect from `saladfinder.com` to `www.saladfinder.com` still needs verification with Netfirms**. Do not assume an ordinary DNS record performs an HTTP redirect or that registrar forwarding includes a valid apex HTTPS certificate. [Cloudflare Pages apex and subdomain requirements](https://developers.cloudflare.com/pages/configuration/custom-domains/)
+An empty sign-in request from the canonical origin reached input validation (400), while a hostile origin was rejected (403). Neither probe created a production account. These checks establish canonical routing and API-origin behavior; an actual app-generated sign-in email and one-time token acceptance remain pending. HTTPS reachability and readiness flags alone do not prove a completed login, consent-backed form submission or payment return.
 
-Before changing the app's canonical URL, verify the actual gateway, HTTPS, same-origin API requests, origin protection, Turnstile, sign-in links, and consent-backed early access on the intended hostname. Update the canonical URL and related deployment/Stripe instructions only as part of that verified migration. Keep `LAUNCH_MODE=preview`.
+The apex still points to its original hosting address. A Netfirms certificate covering the apex and `*.saladfinder.com`, expiring 2026-12-15, was observed before the current delegation change; that earlier observation is not a new acceptance test of the apex's current behavior. The separate Cloudflare Universal SSL Let's Encrypt root/wildcard certificate is **pending validation**, with the existing Netfirms ACME delegation preserved. Its state is distinct from the active Pages certificate for `www`.
+
+Both temporary Worker Custom Domains were detached during the earlier rollback. The gateway is reachable at `www` through Pages, not through those old attachments. No paid plan or domain transfer was ordered. Cloudflare documents the Pages project/domain association and DNS requirements separately from certificate issuance. [Cloudflare Pages custom domains](https://developers.cloudflare.com/pages/configuration/custom-domains/)
+
+## Remaining acceptance and apex behavior
+
+Keep `LAUNCH_MODE=preview`. The canonical URL and Cloudflare email binding shipped together because enabling forms on `www` with the old canonical origin would have caused legitimate submissions to fail origin protection. Existing routing preserves the API and webhook paths under their normal protections; page redirects are limited by the canonical-routing rules.
+
+Complete the real app-generated sign-in acceptance on `www.saladfinder.com`, including the expected sender/link, authentication alignment and token reuse rejection. Consent-backed early-access submissions and payment provider acceptance must be verified in their appropriate workflows; the read-only gateway checks did not create production consent records or payments.
+
+Treat apex HTTPS forwarding as a separate remaining change. The apex A record remains `66.96.160.136`, and a DNS record alone is not an HTTP redirect. The Turnstile widget allows the Workers hostname and `saladfinder.com`, including its subdomains; its existing secret was retained. This website and email release does not complete Stripe setup, legal review or a commercial launch.
 
 ## Preserved legacy service
 

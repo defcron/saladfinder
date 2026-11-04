@@ -10,6 +10,8 @@ The initial categories are cleaning, yard work, moving help, furniture assembly 
 
 ## 2. Set up transactional sign-in email
 
+Current deployment: the Cloudflare sending domain and forwarding paths have passed actual delivery checks, and the restricted app email binding is enabled on `www.saladfinder.com`. Production app-generated sign-in and token acceptance remain pending. Follow the current evidence in [EMAIL.md](EMAIL.md); the setup instructions below also apply to new environments.
+
 Follow [EMAIL.md](EMAIL.md) to configure Cloudflare Email Sending with a restricted native binding, or select the supported Resend alternative. Keep `EMAIL_PROVIDER=disabled` until the sending domain is verified. Configure `EMAIL_FROM`, a working `SUPPORT_EMAIL`, and an administrator's verified email in `ADMIN_EMAILS`. Resend configurations require installing `RESEND_API_KEY` through Wrangler's secure secret prompt. Never paste secrets into issues, commits or chat. Only transactional login emails are sent by the application; waitlist consent is recorded without sending a campaign.
 
 Verify SPF/DKIM/DMARC and delivery using a mailbox you control. A generic API response is not delivery evidence. Keep magic links out of access logs and referrers; the frontend consumes the fragment token and removes it from browser history. Links are single-use and expire after 15 minutes. Production never returns the local development token.
@@ -20,7 +22,7 @@ Verify SPF/DKIM/DMARC and delivery using a mailbox you control. A generic API re
 2. Use test mode first. Accounts v2 creates a recipient account, requests transfers, and uses Stripe-hosted onboarding with Express dashboard access. The app never collects card numbers, bank details or identity documents itself.
 3. Enable debit-card collection in Connect external-account settings if Instant Payouts will be offered. Confirm the platform's Instant Payouts daily limit with Stripe. Canadian eligibility is checked at runtime; it cannot be promised for every worker.
 4. Install secrets using Wrangler's secure prompt: `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_CONNECT_WEBHOOK_SECRET`. The latter two must come from the exact endpoints and correct mode.
-5. Configure platform webhook URL `https://daywork.defcronyke.workers.dev/api/webhooks/stripe` and connected-account webhook URL `https://daywork.defcronyke.workers.dev/api/webhooks/stripe-connect`. See [STRIPE.md](STRIPE.md) for events and integration details.
+5. Configure platform webhook URL `https://www.saladfinder.com/api/webhooks/stripe` and connected-account webhook URL `https://www.saladfinder.com/api/webhooks/stripe-connect`. See [STRIPE.md](STRIPE.md) for events and integration details.
 6. Review Checkout payment-method configuration, tax handling, receipts, statement descriptor, payout schedules and fee disclosures. Worker amounts are agreed gross service amounts; the app does not decide a worker's income tax or GST/HST obligations.
 7. Keep a funded reserve. A successful payment or instant payout does not eliminate later refund or chargeback liability.
 
@@ -39,7 +41,7 @@ npm run db:remote
 npx wrangler deploy
 ```
 
-The configuration binds one D1 database and serves the Vite output from Workers Static Assets. Static paths have browser security headers; API paths have their own no-store/security headers. Turnstile is restricted to the deployment hostname. The SaladFinder domain is prepared but not connected; see [domain connection](DOMAIN.md). When moving to the custom domain, update `APP_URL`, Turnstile allowed hostnames, Stripe return/webhook URLs and links together, and rerun acceptance.
+The configuration binds one D1 database and serves the Vite output from Workers Static Assets. Static paths have browser security headers; API paths have their own no-store/security headers. Turnstile permits the SaladFinder domain and the original Workers hostname. The Pages gateway and HTTPS for `www.saladfinder.com` are active; the canonical URL and email release checkpoint is recorded in [domain connection](DOMAIN.md). Before paid launch, verify `APP_URL`, Turnstile, Stripe return/webhook URLs and same-origin flows on the canonical hostname together. The apex still uses its original hosting record and needs a separate verified HTTPS redirect.
 
 GitHub's manual Deploy workflow expects a scoped `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` in the production environment. Never upload a personal Wrangler OAuth session as a CI secret. Restrict production deployment access and enable GitHub account 2FA. The ordinary CI workflow needs no cloud or payment secrets.
 

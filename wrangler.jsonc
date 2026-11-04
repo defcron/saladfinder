@@ -29,14 +29,20 @@
   },
   "vars": {
     "APP_ENV": "production",
-    "APP_URL": "https://daywork.defcronyke.workers.dev",
+    "APP_URL": "https://www.saladfinder.com",
     "LAUNCH_MODE": "preview",
-    "EMAIL_PROVIDER": "disabled",
-    "EMAIL_FROM": "",
-    "SUPPORT_EMAIL": "",
+    "EMAIL_PROVIDER": "cloudflare",
+    "EMAIL_FROM": "SaladFinder <login@saladfinder.com>",
+    "SUPPORT_EMAIL": "support@saladfinder.com",
     "ADMIN_EMAILS": "",
     "TURNSTILE_SITE_KEY": "0x4AAAAAAFy7jBRAq28vKkD1",
   },
+  "send_email": [
+    {
+      "name": "EMAIL",
+      "allowed_sender_addresses": ["login@saladfinder.com"],
+    },
+  ],
   "d1_databases": [
     {
       "binding": "DB",
