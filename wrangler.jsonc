@@ -36,7 +36,7 @@
     "STRIPE_MODE": "live",
     "FRONTEND_ORIGIN": "https://saladfinder.defcron.chatgpt.site",
     "APP_URL": "https://saladfinder.com",
-    "LAUNCH_MODE": "preview",
+    "LAUNCH_MODE": "live",
     "INSTANT_PAYOUTS_ENABLED": "false",
     "LISTINGS_ENABLED": "true",
     "EMAIL_PROVIDER": "cloudflare",

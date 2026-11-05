@@ -589,16 +589,16 @@ export function InfoPage({ kind }: { kind: "trust" | "terms" | "privacy" }) {
                 : "SaladFinder is in prelaunch preview. Example listings cannot be booked, and real payments are disabled."
               : "Read the job agreement and payment total before accepting work or making a payment."}
           </Alert>
-          <h2>Who this preview is for</h2>
+          <h2>Who the service is for</h2>
           <p>
-            SaladFinder is a project maintained by defcron for an initial
-            Ontario, Canada launch. You must be at least 18. These terms cover
-            browsing, account creation, profiles, early-access signups, and any
-            enabled posting and application features. An application expresses
-            interest; it does not hire a worker or authorize work to start.
-            During the listing preview, do not arrange work or payment through
-            the service. The operator’s legal identity, support process, and
-            final transaction terms must be published before paid jobs open.
+            SaladFinder is operated by Jeremy Carter as a sole proprietor in
+            Ontario, Canada. You must be at least 18. These terms cover
+            accounts, profiles, listings, applications and enabled work and
+            payment features. An application expresses interest; it does not
+            hire a worker or authorize work to start. The poster must hire the
+            worker through the job page before the worker starts the agreed
+            work. When the site is in preview, hiring and paid work remain
+            unavailable.
           </p>
           <h2>Early access</h2>
           <p>
@@ -615,13 +615,13 @@ export function InfoPage({ kind }: { kind: "trust" | "terms" | "privacy" }) {
             service, submit abusive content, or use it for unlawful activity.
             Access may be limited to protect participants and the service.
           </p>
-          <h2>How the planned marketplace works</h2>
+          <h2>Work agreements and payments</h2>
           <p>
             Clients and workers agree on the scope, worker pay, and milestones.
             Workers submit completed work; clients approve and pay.
-            SaladFinder’s proposed service fee is 12% plus $1 CAD per milestone,
-            with a $3 CAD minimum, charged to the client. Payment and payout
-            processing is provided by Stripe under its applicable terms.
+            SaladFinder’s service fee is 12% plus $1 CAD per milestone, with a
+            $3 CAD minimum, charged to the client. Payment and payout processing
+            is provided by Stripe under its applicable terms.
           </p>
           <p>
             Approval is not payment. Payment is not confirmation that a bank has
@@ -633,15 +633,14 @@ export function InfoPage({ kind }: { kind: "trust" | "terms" | "privacy" }) {
           <p>
             Signed-in users can report a problem through the job page. A poster
             can cancel an open listing, and applicants can withdraw pending
-            applications. Once paid work opens, cancellation depends on the job
-            and payment state. Paid work requires review before a refund. A
-            refund is subject to the circumstances, applicable rights, and
-            Stripe processing; a request does not automatically establish
-            entitlement.
+            applications. Cancellation of booked work depends on the job and
+            payment state. Paid work requires review before a refund. A refund
+            is subject to the circumstances, applicable rights, and Stripe
+            processing; a request does not automatically establish entitlement.
           </p>
           <h2>Availability and changes</h2>
           <p>
-            The preview may change or be unavailable. We do not promise job
+            The service may change or be unavailable. We do not promise job
             availability, earnings, suitability of a participant, or same-day
             bank arrival. These terms do not waive rights that cannot lawfully
             be waived.
@@ -650,12 +649,12 @@ export function InfoPage({ kind }: { kind: "trust" | "terms" | "privacy" }) {
           <Contact />
           <p>
             See the <Link to="/privacy">Privacy notice</Link> for what the
-            preview collects and how to remove an early-access signup.
+            service collects and how to manage your records.
           </p>
         </>
       ) : (
         <>
-          <h2>What the preview collects</h2>
+          <h2>Information we collect</h2>
           <p>
             If you join early access, we store your email address, Ontario city,
             whether you want to find work or hire help, your consent timestamp,
@@ -667,8 +666,8 @@ export function InfoPage({ kind }: { kind: "trust" | "terms" | "privacy" }) {
             Cloudflare’s security systems process technical information, such as
             IP address, browser information, and challenge results. The service
             uses short-lived rate-limit records and operational logs to limit
-            abuse and diagnose failures. The public preview does not collect
-            card details, bank credentials, or government identification.
+            abuse and diagnose failures. SaladFinder does not collect card
+            details, bank credentials, or government identification.
           </p>
           <h2>Why we use it</h2>
           <p>
@@ -683,11 +682,15 @@ export function InfoPage({ kind }: { kind: "trust" | "terms" | "privacy" }) {
           <p>
             The app and database use Cloudflare. Data may be processed outside
             Canada under the provider’s infrastructure and terms. Cloudflare
-            Turnstile helps protect forms against abuse. When payment features
-            open, Stripe will collect payment-account information on its own
-            hosted pages. The configured transactional email provider handles
-            sign-in links and essential account messages. Business-mail
-            forwarding routes support requests to the operator’s inbox.
+            Turnstile helps protect forms against abuse. Stripe collects payment
+            and payout-account information on its own hosted pages. We store
+            Stripe account and transaction references, amounts, payment and
+            payout statuses, and reconciliation records to operate payments,
+            handle refunds and investigate disputes. The public frontend is
+            hosted by OpenAI Sites through our Cloudflare gateway. The
+            configured transactional email provider handles sign-in links and
+            essential account messages. Business-mail forwarding routes support
+            requests to the operator’s inbox.
           </p>
           <h2>Your choices</h2>
           <p>
@@ -714,10 +717,9 @@ export function InfoPage({ kind }: { kind: "trust" | "terms" | "privacy" }) {
             features. Public job descriptions, general locations and poster
             names are visible to visitors. Applications and applicant profile
             information are shown to the poster and authorised administration.
-            When hiring opens, private job conversations are limited to
-            participants and authorised administration, and reviews are visible
-            with the job. Do not put sensitive personal information in listings
-            or profiles.
+            Private job conversations are limited to participants and authorised
+            administration, and reviews are visible with the job. Do not put
+            sensitive personal information in listings or profiles.
           </p>
           <p>
             Your account page lets you download your records and revoke active

@@ -13,7 +13,7 @@ An Ontario/CAD local-services marketplace built with React, Cloudflare Workers, 
 - Source: https://github.com/defcron/saladfinder
 - License: [MIT](LICENSE)
 
-The deployed listing pilot uses `LISTINGS_ENABLED=true` with `LAUNCH_MODE=preview`: real posting, applications, withdrawal, open-listing cancellation and reporting are enabled; hiring, starting/submitting work and all money actions remain blocked. The listing gate does not override the paid-launch requirements.
+The operator-authorized paid pilot uses `LISTINGS_ENABLED=true`, `LAUNCH_MODE=live` and live Stripe credentials. Posting, applications, hiring, work messages, milestones, Checkout and standard bank payout requests are enabled. Production instant payouts remain disabled while Stripe’s verified daily limit is CA$0. Core money flows passed managed-sandbox acceptance; no live charge or bank arrival has yet been observed. See [verification](docs/VERIFICATION.md) for exact test coverage and remaining provider checks.
 
 ## Included
 

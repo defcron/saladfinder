@@ -65,5 +65,6 @@ responses served through the Sites origin.
 The legacy ASSETS binding remains for local/staging operation and rollback. To
 disable the Sites origin, remove `FRONTEND_ORIGIN` from production configuration
 and redeploy with the desired local frontend build. This does not roll back D1
-data. Production stays `LAUNCH_MODE=preview`; this hosting migration does not
-enable paid hiring or certify Stripe readiness.
+data. Hosting publication does not itself enable paid hiring or certify Stripe
+readiness. Paid-pilot configuration and evidence are recorded in [LAUNCH.md](LAUNCH.md)
+and [VERIFICATION.md](VERIFICATION.md).

@@ -26,7 +26,7 @@ flowchart LR
 | Stripe API and SDK | Same version and endpoints | Same version and endpoints |
 | D1 | `daywork-staging` | `daywork-production` |
 | Signing secrets and callback URLs | Staging only | Production only |
-| `LAUNCH_MODE` currently | `live` enables sandbox workflows | `preview` until operator launch checklist is complete |
+| `LAUNCH_MODE` currently | `live` enables sandbox workflows | `live` for the operator-authorized paid pilot |
 | `INSTANT_PAYOUTS_ENABLED` currently | `true` to exercise eligibility checks | `false` while the platform limit is CA$0/day |
 
 The word `live` in `LAUNCH_MODE` is an existing application feature gate; it does
@@ -91,12 +91,11 @@ at <https://saladfinder-staging.defcronyke.workers.dev>. Its immutable Worker ID
 encrypted secrets and D1 binding were preserved. The D1 database keeps its legacy
 name `daywork-staging`; no records were migrated. Turnstile permits the new host.
 
-Stripe's two sandbox webhook destinations still need their endpoint URLs updated
-to the new hostname. The dashboard rejected the save with HTTP 403 and redirected
-to sign-in after refresh. The existing destination IDs and signing secrets should
-be retained. Until both URLs are saved and delivery is verified, this migration is
-not accepted for end-to-end sandbox payments. Generate fresh onboarding links and
-sign in again on the new host; old links and cookies reference the previous host.
+Both Stripe sandbox webhook destinations now use the new hostname, with their
+existing destination IDs and signing secrets preserved. The expired dashboard
+session was restored and both saved URLs were verified. Existing synthetic users
+were reauthenticated on the new host and a fresh hosted onboarding link was
+created. Actual payment and payout delivery acceptance is recorded below.
 
 ## Provider acceptance checkpoint — 2026-11-05
 
@@ -109,11 +108,21 @@ balance, payout history, external accounts and payout settings using the
 restricted key. Synthetic app users completed posting, application, hiring,
 starting work, milestone submission and approval through the actual API.
 
-Hosted sandbox onboarding reached its final review with a synthetic identity and
-Stripe's test bank. Final onboarding submission, active capabilities, destination
-Checkout payment, webhook delivery, refunds and payouts are not yet claimed as
-provider-verified. Test records and financial intents are retained in staging for
-continuation; they are not production records. No live charge or payout was made.
+Hosted onboarding completed with a synthetic identity, test CAD bank and instant-
+eligible test debit card. Two CA$29 Checkout payments each contained CA$25 worker
+pay and CA$4 platform fee. A declined test card recovered within the same second
+Checkout session. Signed provider webhooks marked both payments paid. The worker
+received CA$10 instant and CA$10 standard simulated payouts; both reconciled to
+`paid`. Repeating the original requests returned the same payout IDs, and the
+poster was denied access to the worker's payout operation.
+
+A full CA$29 refund initiated in the Stripe sandbox Dashboard reversed the
+associated transfer and refunded the application fee. Its signed event changed
+the app milestone to `refunded`. This verifies external-refund reconciliation;
+it does not establish provider acceptance of the app's admin refund creation
+route. Disputes, failed payouts and reordered event cases additionally pass the
+local regression suite but are not all provider-tested. No real charge or payout
+was made. Clearly marked synthetic records remain only in staging.
 
 References: [Stripe sandboxes](https://docs.stripe.com/sandboxes),
 [Connect testing](https://docs.stripe.com/connect/testing),
