@@ -5,6 +5,7 @@ import { z } from "zod";
 import type { AppEnv } from "./types";
 import { requireAdmin, requireUser, rateLimit } from "./middleware";
 import { feeCents } from "../shared/types";
+import { stripeReadiness } from "./stripe-readiness";
 
 type Payment = {
   id: string;
@@ -339,6 +340,17 @@ export function createPaymentsRouter(
 ) {
   const router = new Hono<AppEnv>();
 
+  router.get("/admin/payments/readiness", requireAdmin, async (c) => {
+    await rateLimit(c, "stripe-readiness", c.get("user")!.id, 5, 60);
+    if (!stripeConfigured(c.env))
+      throw new HTTPException(503, {
+        message: "Stripe secrets are not fully configured.",
+      });
+    // This diagnostic works in preview, without opening any money routes.
+    assertPaymentAccess({ ...c.env, LAUNCH_MODE: "live" });
+    return c.json(await stripeReadiness(makeStripe(c.env), c.env));
+  });
+
   router.get("/admin/payments", requireAdmin, async (c) => {
     const [incidents, unresolvedPayments, payouts, refunds] = await Promise.all(
       [
@@ -439,6 +451,7 @@ export function createPaymentsRouter(
       settings.payments.payouts?.schedule?.interval ?? null;
     const ready = readiness.transfersEnabled && readiness.payoutsEnabled;
     const instantEligible =
+      c.env.INSTANT_PAYOUTS_ENABLED === "true" &&
       ready &&
       !held &&
       options.instantAmount >= payoutLimits.instant.minimum_cents;
@@ -476,7 +489,9 @@ export function createPaymentsRouter(
         ? "In-app payout requests are paused while a reported job is reviewed. Existing Stripe transfers and payouts are not recalled."
         : testMode
           ? "Stripe test mode: no real money moves and no bank payout occurs."
-          : "Request an instant payout to an eligible debit card or a standard payout to a linked bank account. Instant arrival is usually within 30 minutes, but delays can occur. Standard payouts take longer; settlement and bank processing still apply.",
+          : c.env.INSTANT_PAYOUTS_ENABLED !== "true"
+            ? "Instant payouts are unavailable on this platform. Standard payouts to an eligible bank account remain available; settlement and bank processing times apply."
+            : "Request an instant payout to an eligible debit card or a standard payout to a linked bank account. Instant arrival is usually within 30 minutes, but delays can occur. Standard payouts take longer; settlement and bank processing still apply.",
     });
   });
 
@@ -788,6 +803,14 @@ export function createPaymentsRouter(
         );
         return c.json({ payout: compactPayout(payout) });
       }
+      if (
+        input.method === "instant" &&
+        c.env.INSTANT_PAYOUTS_ENABLED !== "true"
+      )
+        throw new HTTPException(409, {
+          message:
+            "Instant payouts are unavailable on this platform. Choose a standard bank payout.",
+        });
       if (await frozen(c.env.DB, user.id))
         throw new HTTPException(409, {
           message: "Payouts are paused while a reported job is reviewed.",

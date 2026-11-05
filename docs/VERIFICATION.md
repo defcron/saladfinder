@@ -1,3 +1,15 @@
+## 2026-11-05 Connect configuration and deployed credential verification
+
+- The operator reported finishing the bank settings update. Stripe now shows Connect's normal overview and an enabled connected account with payments and payouts active. This is dashboard evidence, not an app-created onboarding acceptance test.
+- Created the active connected-account snapshot webhook at `https://saladfinder.com/api/webhooks/stripe-connect`, API version `2026-10-28.endive`, for `payout.created`, `payout.updated`, `payout.paid`, `payout.failed` and `payout.canceled`. Installed its encrypted `STRIPE_CONNECT_WEBHOOK_SECRET`; Wrangler independently confirmed all three Stripe secret names in production.
+- Saved and reread Connect external-account settings: require a bank account, allow debit cards, and allow multiple external accounts per currency. These settings support collecting both standard-bank and eligible instant-card destinations.
+- The platform's Instant Payouts dashboard shows **CA$0/day**. Deployed `INSTANT_PAYOUTS_ENABLED=false`; the status response cannot select instant, and the server rejects new instant requests. Standard payouts remain implemented. Enabling instant later requires a positive provider limit and acceptance checks, not merely flipping this setting.
+- Added an administrator-only, rate-limited, read-only `/api/admin/payments/readiness` check. From the actual production deployment, all four checks passed: the Canadian platform account has charges/payouts enabled and details submitted; Accounts v2 list access works; the live balance endpoint works; both enabled webhook configurations contain the expected events/version. The response excludes balances, identity data, keys and raw provider errors.
+- Production Worker `cdf37ecb-3b51-4c81-b52c-1c0b0cefb9fb` deployed successfully. `LAUNCH_MODE=preview` remains. Sites frontend assets were unchanged.
+- `npm run check` passed (178 tests, typecheck and build); `npm run coverage` passed (93.48% lines); `npm run test:e2e` passed all 18 desktop/mobile tests. New regression coverage includes administrator denial, rate limiting, configuration failures, sanitized provider errors and instant-disable enforcement without disabling standard payouts.
+- Prepared an isolated managed sandbox named `SaladFinder staging` from the platform settings/capabilities; creating it and test credentials awaits operator approval. No sandbox creation is claimed at this checkpoint.
+- Outstanding: end-to-end sandbox onboarding, destination charges, refund/payout reconciliation and actual webhook delivery; operator launch checklist; authorized controlled live transaction/payout. Read access and configuration checks do not establish write permissions or bank arrival. No live money action was performed.
+
 ## 2026-11-04 live Stripe credential setup
 
 - Verified the lowercase `saladfinder` organization and selected its enabled Canadian member account. The organization itself is not the payment account.

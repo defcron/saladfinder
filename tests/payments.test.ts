@@ -277,6 +277,7 @@ describe("payment ownership, ledger and Stripe event reconciliation", () => {
       APP_ENV: "local",
       APP_URL: "http://localhost",
       LAUNCH_MODE: "live",
+      INSTANT_PAYOUTS_ENABLED: "true",
       STRIPE_SECRET_KEY: "sk_test_payment_fixture",
       STRIPE_WEBHOOK_SECRET: "whsec_platform_fixture",
       STRIPE_CONNECT_WEBHOOK_SECRET: "whsec_connect_fixture",
@@ -994,6 +995,83 @@ describe("payment ownership, ledger and Stripe event reconciliation", () => {
       payouts: [],
       refunds: [],
     });
+  });
+
+  it("denies connection diagnostics to anonymous users and other members before contacting Stripe", async () => {
+    for (const [user, status] of [
+      ["", 401],
+      ["poster", 403],
+      ["worker", 403],
+    ] as const) {
+      expect(
+        (await request("/admin/payments/readiness", user, {}, "GET")).status,
+      ).toBe(status);
+    }
+    expect(fixture.stripe.accounts.retrieve).not.toHaveBeenCalled();
+  });
+
+  it("blocks diagnostic provider calls when secrets are incomplete or use the wrong mode", async () => {
+    env.STRIPE_CONNECT_WEBHOOK_SECRET = "";
+    expect(
+      (await request("/admin/payments/readiness", "admin", {}, "GET")).status,
+    ).toBe(503);
+    env.STRIPE_CONNECT_WEBHOOK_SECRET = "whsec_fixture";
+    env.APP_ENV = "production";
+    expect(
+      (await request("/admin/payments/readiness", "admin", {}, "GET")).status,
+    ).toBe(503);
+    expect(fixture.stripe.accounts.retrieve).not.toHaveBeenCalled();
+  });
+
+  it("allows bounded administrator diagnostics in preview without opening payment routes", async () => {
+    env.LAUNCH_MODE = "preview";
+    for (let i = 0; i < 5; i++) {
+      const response = await request(
+        "/admin/payments/readiness",
+        "admin",
+        {},
+        "GET",
+      );
+      expect(response.status).toBe(200);
+      expect(await response.json()).toMatchObject({ launchMode: "preview" });
+    }
+    expect(
+      (await request("/admin/payments/readiness", "admin", {}, "GET")).status,
+    ).toBe(429);
+    expect((await request("/milestones/milestone/checkout")).status).toBe(503);
+    expect(fixture.stripe.checkout.sessions.create).not.toHaveBeenCalled();
+  });
+
+  it("enforces the platform instant-payout switch while preserving standard payouts", async () => {
+    env.INSTANT_PAYOUTS_ENABLED = "false";
+    const status = await (
+      await request("/payments/status", "worker", {}, "GET")
+    ).json();
+    expect(status).toMatchObject({
+      instantEligible: false,
+      standardEligible: true,
+      defaultPayoutMethod: "standard",
+    });
+    const instant = await request("/payments/payout", "worker", {
+      method: "instant",
+      amount_cents: 1000,
+      requestId: crypto.randomUUID(),
+    });
+    expect(instant.status).toBe(409);
+    expect(fixture.stripe.payouts.create).not.toHaveBeenCalled();
+    const standard = await request("/payments/payout", "worker", {
+      method: "standard",
+      amount_cents: 1000,
+      requestId: crypto.randomUUID(),
+    });
+    expect(standard.status).toBe(200);
+    env.STRIPE_SECRET_KEY = "rk_live_fixture";
+    const liveStatus = await (
+      await request("/payments/status", "worker", {}, "GET")
+    ).json();
+    expect((liveStatus as { message: string }).message).toContain(
+      "Instant payouts are unavailable",
+    );
   });
 
   it("prefers eligible instant payouts and explicitly routes standard payouts to a bank rather than the default card", async () => {

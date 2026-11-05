@@ -6,7 +6,7 @@
 
 An Ontario/CAD local-services marketplace built with React, Cloudflare Workers, D1 and Stripe Connect. Its implemented workflow covers job listings, applications and agreed milestones. Once the paid-launch requirements are met, customers can pay approved milestones through Stripe Checkout and eligible workers can request Instant Payouts or choose standard bank payouts, subject to Stripe's actual timing.
 
-**Launch status: public preview.** Real-money transactions are disabled. Stripe owner verification, full Connect/payment-provider acceptance, complete production account sign-in acceptance and reviewed operator details/policies are required before paid launch. This repository is not evidence that those external steps are complete. See [launch runbook](docs/LAUNCH.md) and [verification record](docs/VERIFICATION.md).
+**Launch status: public preview.** Real-money transactions are disabled. Live Stripe credentials and both webhook configurations are installed and read-only production connection checks pass. Full payment-provider acceptance and the operator launch checklist remain required. Stripe currently allows CA$0/day of Instant Payouts, so that option is disabled in production. This repository is not evidence that those external steps are complete. See [launch runbook](docs/LAUNCH.md) and [verification record](docs/VERIFICATION.md).
 
 - App: https://saladfinder.com
 - Apex HTTP/HTTPS and previous Workers/Pages page URLs redirect to the canonical `www` hostname, preserving paths and queries ([domain status](docs/DOMAIN.md)).
