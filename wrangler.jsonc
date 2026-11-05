@@ -34,6 +34,10 @@
   "vars": {
     "APP_ENV": "production",
     "STRIPE_MODE": "live",
+    "PRICING_ENABLED": "true",
+    "SUBSCRIPTIONS_ENABLED": "false",
+    "STRIPE_ECONOMY_PRICE": "price_1UYVcfAUuoHexO68guUHb0Hv",
+    "STRIPE_PREMIUM_PRICE": "price_1UYVdOAUuoHexO68kKxNSQhq",
     "FRONTEND_ORIGIN": "https://saladfinder.defcron.chatgpt.site",
     "APP_URL": "https://saladfinder.com",
     "LAUNCH_MODE": "live",
@@ -89,6 +93,10 @@
       "routes": [],
       "vars": {
         "APP_ENV": "staging",
+        "PRICING_ENABLED": "true",
+        "SUBSCRIPTIONS_ENABLED": "false",
+        "STRIPE_ECONOMY_PRICE": "price_1UYVhkAJiXWJHbyYjFY4Wc5W",
+        "STRIPE_PREMIUM_PRICE": "price_1UYVidAJiXWJHbyYpJk5tOpJ",
         "STRIPE_MODE": "test",
         "APP_URL": "https://saladfinder-staging.defcronyke.workers.dev",
         "LAUNCH_MODE": "live",

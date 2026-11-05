@@ -1,4 +1,5 @@
 import Stripe from "stripe";
+import { billingEvent } from "./billing";
 import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { z } from "zod";
@@ -22,6 +23,7 @@ type Payment = {
   account_id: string;
   amount_cents: number;
   fee_cents: number;
+  worker_fee_cents?: number;
   currency: string;
   status: string;
   checkout_session_id: string | null;
@@ -39,6 +41,8 @@ type Milestone = {
   poster_id: string;
   worker_id: string | null;
   job_status: string;
+  fee_cents?: number | null;
+  worker_fee_cents?: number;
   account_id: string | null;
   worker_suspended: string | null;
 };
@@ -314,7 +318,8 @@ export function validatePaidSession(
     intent.amount === payment.amount_cents + payment.fee_cents &&
     intent.amount_received === payment.amount_cents + payment.fee_cents &&
     intent.status === "succeeded" &&
-    intent.application_fee_amount === payment.fee_cents &&
+    intent.application_fee_amount ===
+      payment.fee_cents + (payment.worker_fee_cents ?? 0) &&
     objectId(intent.transfer_data?.destination) === payment.account_id &&
     objectId(session.payment_intent) === intent.id &&
     session.metadata?.payment_attempt_id === payment.id &&
@@ -628,19 +633,24 @@ export function createPaymentsRouter(
       const id = crypto.randomUUID();
       await c.env.DB.batch([
         c.env.DB.prepare(
-          "INSERT OR IGNORE INTO payment_attempts (id,milestone_id,attempt,poster_id,worker_id,account_id,amount_cents,fee_cents) SELECT ?,id,?,?,?,?,amount_cents,? FROM milestones WHERE id = ? AND status = 'approved' AND EXISTS (SELECT 1 FROM jobs WHERE id = milestones.job_id AND status IN ('assigned','in_progress'))",
+          "INSERT OR IGNORE INTO payment_attempts (id,milestone_id,attempt,poster_id,worker_id,account_id,amount_cents,fee_cents,worker_fee_cents) SELECT ?,id,?,?,?,?,amount_cents,?,worker_fee_cents FROM milestones WHERE id = ? AND status = 'approved' AND EXISTS (SELECT 1 FROM jobs WHERE id = milestones.job_id AND status IN ('assigned','in_progress'))",
         ).bind(
           id,
           next,
           user.id,
           item.worker_id,
           item.account_id,
-          platformFee(item.amount_cents),
+          item.fee_cents ?? platformFee(item.amount_cents),
           item.id,
         ),
         c.env.DB.prepare(
           "UPDATE milestones SET status = 'checkout_pending', fee_cents = ? WHERE id = ? AND status = 'approved' AND EXISTS (SELECT 1 FROM payment_attempts WHERE milestone_id = ? AND attempt = ?)",
-        ).bind(platformFee(item.amount_cents), item.id, item.id, next),
+        ).bind(
+          item.fee_cents ?? platformFee(item.amount_cents),
+          item.id,
+          item.id,
+          next,
+        ),
       ]);
       attempt = await c.env.DB.prepare(
         "SELECT * FROM payment_attempts WHERE milestone_id = ? AND attempt = ?",
@@ -680,7 +690,8 @@ export function createPaymentsRouter(
       ],
       metadata: { payment_attempt_id: attempt.id, milestone_id: item.id },
       payment_intent_data: {
-        application_fee_amount: attempt.fee_cents,
+        application_fee_amount:
+          attempt.fee_cents + (attempt.worker_fee_cents ?? 0),
         transfer_data: { destination: attempt.account_id },
         metadata: { payment_attempt_id: attempt.id, milestone_id: item.id },
       },
@@ -1162,6 +1173,10 @@ export function createPaymentsRouter(
       const markEvent = c.env.DB.prepare(
         "INSERT OR IGNORE INTO stripe_events (id,type,account_id,created) VALUES (?,?,?,?)",
       ).bind(event.id, event.type, event.account ?? null, event.created);
+      if (!connected && (await billingEvent(c.env, stripe, event))) {
+        await markEvent.run();
+        return c.json({ received: true });
+      }
       if (
         !connected &&
         (event.type === "checkout.session.completed" ||

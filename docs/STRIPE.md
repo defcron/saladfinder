@@ -22,7 +22,7 @@ The owner must configure which payment methods Checkout presents. The applicatio
 
 ## Flow and records
 
-A client approves a milestone, then pays its worker amount plus `max(CA$3, 12% + CA$1)` through hosted Checkout. The shared `feeCents` function is used by server and client. The server stores the exact request payload and idempotency key before calling Stripe; a request retry uses that payload, even if application settings change. One milestone can have another attempt only after the prior Checkout session is definitively expired.
+A client approves a milestone, then pays its gross amount plus the poster fee recorded when the job was posted. For new pricing, `src/shared/pricing.ts` calculates plan-based fees; legacy jobs retain `max(CA$3, 12% + CA$1)`. The worker fee is frozen at application and deducted from gross. The destination-charge application fee is the sum of poster and worker fees. The server stores the exact request payload and idempotency key before calling Stripe; a request retry uses that payload, even if application settings change. One milestone can have another attempt only after the prior Checkout session is definitively expired.
 
 The redirect from Checkout merely returns the client to the job. A signed webhook verifies the canonical PaymentIntent, paid amount, currency, fee, destination, metadata and mode before updating the ledger. Full refunds take precedence over late success notifications. Refunds and disputes delivered before Checkout success are linked through canonical PaymentIntent metadata. Payout notifications retrieve current Stripe state to prevent stale events from regressing the ledger.
 
@@ -52,7 +52,7 @@ Readiness is determined from the Canadian Accounts v2 recipient's active `stripe
 
 Manual scheduling creates an operator obligation: Stripe's maximum holding period for Canadian balances is **90 days**. Before enabling paid bookings, establish a daily review of outstanding balances and their age, reminders and escalation well before that deadline, and a documented payout/reconciliation path for inactive workers or restricted accounts. The app does not automatically sweep aging balances or provide that external monitoring. An app dispute flag cannot justify holding funds indefinitely. See [manual payouts](https://docs.stripe.com/connect/manual-payouts).
 
-SaladFinder's proposed pricing absorbs processing and payout fees rather than deducting an additional payout charge from the displayed worker amount. Stripe currently lists an additional 1% platform fee for Connect Instant Payouts; the platform's other Connect and payment fees still apply. Confirm the actual account's pricing and limits before paid launch. See [Canadian Connect pricing](https://stripe.com/en-ca/connect/pricing).
+SaladFinder charges its disclosed worker fee per milestone and shows net earnings. It does not deduct another SaladFinder fee at payout. The platform bears processor and payout costs from its service revenue. Stripe currently lists an additional 1% platform fee for Connect Instant Payouts; the platform's other Connect and payment fees still apply. Confirm the actual account's pricing and limits before paid launch. See [Canadian Connect pricing](https://stripe.com/en-ca/connect/pricing).
 
 ## Retry safety
 

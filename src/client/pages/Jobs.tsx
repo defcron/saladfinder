@@ -1,3 +1,4 @@
+import { transactionFee, PRICING_VERSION } from "../../shared/pricing";
 import { useEffect, useState, type FormEvent } from "react";
 import {
   Link,
@@ -133,7 +134,15 @@ export function PostJob() {
   );
   const budget = amounts.reduce((a, b) => a + b, 0);
   const fees = amounts.reduce(
-    (sum, amount) => sum + (amount > 0 ? feeFor(amount) : 0),
+    (sum, amount) =>
+      sum +
+      (amount > 0 && amount <= 500000
+        ? transactionFee(
+            amount,
+            "poster",
+            config?.pricingEnabled ? (config.plan ?? "standard") : "legacy",
+          )
+        : 0),
     0,
   );
   const listingsReady = config?.listingsReady ?? config?.launchMode === "live";
@@ -147,6 +156,10 @@ export function PostJob() {
     if (!user || !listingsReady) return;
     void action.run(async () => {
       const data = await post<{ job: { id: string } }>("/jobs", {
+        feePlan: config?.pricingEnabled
+          ? (config.plan ?? "standard")
+          : "legacy",
+        pricingVersion: PRICING_VERSION,
         title,
         description,
         category,
@@ -399,8 +412,9 @@ export function PostJob() {
             </div>
           </dl>
           <p>
-            12% + $1 per paid milestone, with a $3 minimum fee. Workers receive
-            the listed amount before their own taxes.
+            {config?.pricingEnabled
+              ? `Your ${config.plan ?? "standard"} poster fee is shown above. Worker fees are deducted separately from the listed gross pay. Publishing records this fee plan for the job.`
+              : "12% + $1 per paid milestone, with a $3 minimum fee. Workers receive the listed amount before their own taxes."}
           </p>
           <p>No charge to publish a job.</p>
           <div className="quote-rule">
@@ -505,6 +519,15 @@ export function JobPage() {
       </div>
     );
   const { job, milestones } = data;
+  const workerFeeFor = (m: Milestone) =>
+    job.worker_id
+      ? (m.worker_fee_cents ?? 0)
+      : (data.workerFeeQuotes?.[m.id] ??
+        transactionFee(
+          m.amount_cents,
+          "worker",
+          data.workerFeePlan ?? "legacy",
+        ));
   const owner = user?.id === job.poster_id,
     worker = user?.id === job.worker_id,
     participant = owner || worker;
@@ -631,6 +654,14 @@ export function JobPage() {
                       <strong>{money(m.amount_cents)}</strong>
                     </div>
                     <Status value={m.status} />
+                    {!example && !owner && (
+                      <p className="small-text">
+                        Gross: {money(m.amount_cents)} · Worker fee:{" "}
+                        {money(workerFeeFor(m))} · Net earnings:{" "}
+                        {money(m.amount_cents - workerFeeFor(m))} CAD before
+                        taxes.
+                      </p>
+                    )}
                     {owner &&
                       !example &&
                       ["submitted", "approved", "checkout_pending"].includes(
@@ -638,8 +669,13 @@ export function JobPage() {
                       ) && (
                         <p className="small-text">
                           Worker: {money(m.amount_cents)} · Fee:{" "}
-                          {money(feeFor(m.amount_cents))} · Total:{" "}
-                          {money(m.amount_cents + feeFor(m.amount_cents))} CAD
+                          {money(m.fee_cents ?? feeFor(m.amount_cents))} ·
+                          Total:{" "}
+                          {money(
+                            m.amount_cents +
+                              (m.fee_cents ?? feeFor(m.amount_cents)),
+                          )}{" "}
+                          CAD
                         </p>
                       )}
                     {!example && activeJob && (
@@ -686,7 +722,10 @@ export function JobPage() {
                               onClick={() => checkout(m)}
                             >
                               Pay{" "}
-                              {money(m.amount_cents + feeFor(m.amount_cents))}{" "}
+                              {money(
+                                m.amount_cents +
+                                  (m.fee_cents ?? feeFor(m.amount_cents)),
+                              )}{" "}
                               CAD
                               <ArrowRight size={16} />
                             </button>
@@ -1000,11 +1039,21 @@ export function JobPage() {
                     e.preventDefault();
                     act(
                       `/jobs/${id}/apply`,
-                      { message: application },
+                      {
+                        message: application,
+                        feePlan: data.workerFeePlan ?? "legacy",
+                        pricingVersion: PRICING_VERSION,
+                      },
                       "Application sent.",
                     );
                   }}
                 >
+                  <p>
+                    Review the worker fee and net earnings shown for each
+                    milestone above. Applying records your displayed fee plan
+                    for this job; later subscription changes do not reprice this
+                    application.
+                  </p>
                   <label>
                     Introduce yourself
                     <textarea

@@ -65,3 +65,13 @@ Moderation records and account actions are auditable. Other open reports must be
 ## Stripe routes
 
 The payment module provides connected-account onboarding/status/dashboard, milestone Checkout creation, standard/eligible instant payout requests, refunds, and signed platform/Connect webhook endpoints. See [launch setup](./LAUNCH.md) and the implementation contract for setup details. Live credentials, webhook secrets, configured launch mode and completed onboarding are required for money movement. Payout requests use client-generated UUID request IDs to prevent duplicate withdrawal on retries.
+
+## Subscription billing and fee consent
+
+- `GET /billing/status`: authenticated current plan, paid-through time, cancellation/risk state and portal availability; no provider identifiers.
+- `POST /billing/checkout` with `{plan:"economy"|"premium"}`: authenticated, live-mode-gated purchase; server-owned customer and allowlisted CAD monthly Price. Duplicate/uncertain requests reuse durable idempotency and cannot open overlapping subscriptions.
+- `POST /billing/portal` with `{}`: short-lived Stripe Customer Portal URL for the signed-in account only.
+
+When `config.pricingEnabled` is true, job creation and applications to new-priced jobs must include the displayed `feePlan` and `pricingVersion` from `/config` or job details. A changed plan/version returns 409 to require a fresh quote. Client monetary amounts never determine service fees. Job detail exposes `workerFeePlan` and saved `workerFeeQuotes` for the viewer's own application. Poster amounts freeze on job creation; worker fees freeze on application, then copy to the hired milestones and immutable payment attempts.
+
+Signed events at `/webhooks/stripe` reconcile subscription entitlements against current Stripe state. Return URLs do not activate plans. Expired/unpaid/canceled entitlements fall back to Standard; period-end cancellation retains paid benefits through the verified term. See [subscription operations](./SUBSCRIPTIONS-DESIGN.md).

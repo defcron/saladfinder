@@ -1,3 +1,9 @@
+import { currentPlan } from "./billing";
+import {
+  transactionFee,
+  PRICING_VERSION,
+  type FeePlan,
+} from "../shared/pricing";
 import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { z } from "zod";
@@ -43,7 +49,7 @@ function participant(job: Job, id: string): boolean {
   return job.poster_id === id || job.worker_id === id;
 }
 const milestonePublic =
-  "id,job_id,title,amount_cents,position,status,submitted_at,approved_at,created_at,paid_at,fee_cents";
+  "id,job_id,title,amount_cents,position,status,submitted_at,approved_at,created_at,paid_at,fee_cents,worker_fee_cents";
 
 marketplace.get("/jobs", async (c) => {
   const query = z
@@ -156,13 +162,27 @@ marketplace.get("/jobs/:id", async (c) => {
   return c.json({
     job,
     milestones: milestones.results,
+    workerFeePlan:
+      job.fee_plan === "legacy"
+        ? "legacy"
+        : (myApplication?.fee_plan ??
+          (user ? await currentPlan(c.env.DB, user.id) : "standard")),
     applications,
     myApplication,
+    workerFeeQuotes: myApplication
+      ? Object.fromEntries(
+          JSON.parse(myApplication.worker_fee_snapshot ?? "[]").map(
+            (m: { id: string; fee: number }) => [m.id, m.fee],
+          ),
+        )
+      : {},
     messages,
     reviews,
   });
 });
 const jobInput = z.object({
+  feePlan: z.enum(["standard", "economy", "premium", "legacy"]).optional(),
+  pricingVersion: z.string().optional(),
   title: z.string().trim().min(8).max(120),
   description: z.string().trim().min(40).max(5000),
   category: z.enum(CATEGORIES),
@@ -184,6 +204,18 @@ marketplace.post("/jobs", requireUser, requireListings, async (c) => {
   const body = await jsonInput(c, jobInput);
   const user = c.get("user")!;
   await rateLimit(c, "post-job", user.id, 20, 86400);
+  const feePlan: FeePlan =
+    c.env.PRICING_ENABLED === "true"
+      ? await currentPlan(c.env.DB, user.id)
+      : "legacy";
+  if (
+    feePlan !== "legacy" &&
+    (body.feePlan !== feePlan || body.pricingVersion !== PRICING_VERSION)
+  )
+    fail(
+      409,
+      "Pricing changed. Refresh the page and review your fee before posting.",
+    );
   const date = new Date(`${body.start_date}T12:00:00Z`);
   const today = new Intl.DateTimeFormat("en-CA", {
     timeZone: "America/Toronto",
@@ -204,7 +236,7 @@ marketplace.post("/jobs", requireUser, requireListings, async (c) => {
   const id = crypto.randomUUID();
   await c.env.DB.batch([
     c.env.DB.prepare(
-      "INSERT INTO jobs (id,poster_id,title,description,category,city,area,start_date,estimated_hours,budget_cents,payment_schedule) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+      "INSERT INTO jobs (id,poster_id,title,description,category,city,area,start_date,estimated_hours,budget_cents,payment_schedule,fee_plan) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
     ).bind(
       id,
       user.id,
@@ -217,20 +249,36 @@ marketplace.post("/jobs", requireUser, requireListings, async (c) => {
       body.estimated_hours,
       budget,
       body.milestones.length > 1 ? "milestones" : "completion",
+      feePlan,
     ),
     ...body.milestones.map((m, position) =>
       c.env.DB.prepare(
-        "INSERT INTO milestones (id,job_id,title,amount_cents,position) VALUES (?,?,?,?,?)",
-      ).bind(crypto.randomUUID(), id, m.title, m.amount_cents, position),
+        "INSERT INTO milestones (id,job_id,title,amount_cents,position,fee_cents) VALUES (?,?,?,?,?,?)",
+      ).bind(
+        crypto.randomUUID(),
+        id,
+        m.title,
+        m.amount_cents,
+        position,
+        transactionFee(m.amount_cents, "poster", feePlan),
+      ),
     ),
     audit(c.env.DB, user.id, "job.created", id, { budget_cents: budget }),
   ]);
   return c.json({ job: await getJob(c.env.DB, id) }, 201);
 });
 marketplace.post("/jobs/:id/apply", requireUser, requireListings, async (c) => {
-  const { message } = await jsonInput(
+  const {
+    message,
+    feePlan: acceptedPlan,
+    pricingVersion,
+  } = await jsonInput(
     c,
-    z.object({ message: z.string().trim().min(20).max(2000) }),
+    z.object({
+      message: z.string().trim().min(20).max(2000),
+      feePlan: z.enum(["standard", "economy", "premium", "legacy"]).optional(),
+      pricingVersion: z.string().optional(),
+    }),
   );
   const user = c.get("user")!;
   const job = await getJob(c.env.DB, c.req.param("id"));
@@ -238,10 +286,41 @@ marketplace.post("/jobs/:id/apply", requireUser, requireListings, async (c) => {
   if (job.status !== "open")
     fail(409, "This job is no longer accepting applications.");
   await rateLimit(c, "apply", user.id, 50, 86400);
-  const result = await c.env.DB.prepare(
-    "INSERT OR IGNORE INTO applications (id,job_id,worker_id,message) SELECT ?,id,?,? FROM jobs WHERE id=? AND status='open' AND poster_id<>? AND NOT EXISTS (SELECT 1 FROM users WHERE id=jobs.poster_id AND suspended_at IS NOT NULL)",
+  const feePlan: FeePlan =
+    job.fee_plan === "legacy" ? "legacy" : await currentPlan(c.env.DB, user.id);
+  if (
+    feePlan !== "legacy" &&
+    (acceptedPlan !== feePlan || pricingVersion !== PRICING_VERSION)
   )
-    .bind(crypto.randomUUID(), user.id, message, job.id, user.id)
+    fail(
+      409,
+      "Pricing changed. Refresh the job and review your net pay before applying.",
+    );
+  const quoteMilestones = (
+    await c.env.DB.prepare(
+      "SELECT id,amount_cents FROM milestones WHERE job_id=? ORDER BY position",
+    )
+      .bind(job.id)
+      .all<{ id: string; amount_cents: number }>()
+  ).results;
+  const snapshot = JSON.stringify(
+    quoteMilestones.map((m) => ({
+      id: m.id,
+      fee: transactionFee(m.amount_cents, "worker", feePlan),
+    })),
+  );
+  const result = await c.env.DB.prepare(
+    "INSERT OR IGNORE INTO applications (id,job_id,worker_id,message,fee_plan,worker_fee_snapshot) SELECT ?,id,?,?,?,? FROM jobs WHERE id=? AND status='open' AND poster_id<>? AND NOT EXISTS (SELECT 1 FROM users WHERE id=jobs.poster_id AND suspended_at IS NOT NULL)",
+  )
+    .bind(
+      crypto.randomUUID(),
+      user.id,
+      message,
+      feePlan,
+      snapshot,
+      job.id,
+      user.id,
+    )
     .run();
   if (!result.meta.changes)
     fail(409, "You have already applied, or this job is no longer available.");
@@ -277,10 +356,30 @@ marketplace.post("/jobs/:id/hire", requireUser, requireLive, async (c) => {
     .bind(applicationId, id)
     .first<Application>();
   if (!application) fail(409, "This application is no longer available.");
+  const frozenWorkerFees = new Map<string, number>(
+    (
+      JSON.parse(application.worker_fee_snapshot ?? "[]") as {
+        id: string;
+        fee: number;
+      }[]
+    ).map((m) => [m.id, m.fee]),
+  );
+  const pricedMilestones = (
+    await c.env.DB.prepare(
+      "SELECT id,amount_cents FROM milestones WHERE job_id=?",
+    )
+      .bind(id)
+      .all<{ id: string; amount_cents: number }>()
+  ).results;
   const results = await c.env.DB.batch([
     c.env.DB.prepare(
       "UPDATE jobs SET worker_id=?,status='assigned',updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=? AND poster_id=? AND status='open' AND EXISTS (SELECT 1 FROM applications a JOIN users u ON u.id=a.worker_id WHERE a.id=? AND a.job_id=jobs.id AND a.status='pending' AND u.suspended_at IS NULL)",
     ).bind(application.worker_id, id, user.id, applicationId),
+    ...pricedMilestones.map((m) =>
+      c.env.DB.prepare(
+        "UPDATE milestones SET worker_fee_cents=? WHERE id=? AND EXISTS (SELECT 1 FROM jobs WHERE id=? AND worker_id=? AND status='assigned')",
+      ).bind(frozenWorkerFees.get(m.id) ?? 0, m.id, id, application.worker_id),
+    ),
     c.env.DB.prepare(
       "UPDATE applications SET status=CASE WHEN id=? THEN 'accepted' ELSE 'declined' END WHERE job_id=? AND status='pending' AND EXISTS (SELECT 1 FROM jobs WHERE id=? AND worker_id=? AND status='assigned')",
     ).bind(applicationId, id, id, application.worker_id),

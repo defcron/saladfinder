@@ -1,3 +1,5 @@
+import { PlanComparison } from "../billing";
+import { transactionFee, PLANS, type Plan } from "../../shared/pricing";
 import { useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import {
@@ -276,30 +278,48 @@ export function Waitlist() {
 }
 export function Pricing() {
   const { config } = useApp();
+  const [posterPlan, setPosterPlan] = useState<Plan>("standard");
+  const [workerPlan, setWorkerPlan] = useState<Plan>("standard");
   const [pay, setPay] = useState("100");
   const [count, setCount] = useState("1");
-  const amount = Math.max(0, Math.round(Number(pay || 0) * 100));
+  const amount = Math.min(
+    500000,
+    Math.max(0, Math.round(Number(pay || 0) * 100)),
+  );
   const milestones = Math.max(1, Math.min(5, Number(count) || 1));
-  const fee = feeFor(amount) * milestones;
+  const fee =
+    transactionFee(
+      amount,
+      "poster",
+      config?.pricingEnabled ? posterPlan : "legacy",
+    ) * milestones;
+  const workerFees =
+    transactionFee(
+      amount,
+      "worker",
+      config?.pricingEnabled ? workerPlan : "legacy",
+    ) * milestones;
   const worker = amount * milestones;
   return (
     <section className="page-wrap">
       <PageHeading title="A fair day’s work. A clear price.">
         <p>
-          Workers keep the listed pay. Clients cover a straightforward service
-          fee when they pay a milestone.
+          {config?.pricingEnabled
+            ? "See the client total and worker net earnings before agreeing to work. Each participant’s own plan determines their fees."
+            : "Workers keep the listed pay. Clients cover a straightforward service fee when they pay a milestone."}
         </p>
       </PageHeading>
+      {config?.pricingEnabled && <PlanComparison />}
       <div className="pricing-layout">
         <section className="pricing-story">
           <div className="big-price">
-            12% <span>+ $1 CAD</span>
+            {config?.pricingEnabled ? "14.9%" : "12%"} <span>+ $1 CAD</span>
           </div>
           <p className="lead">per paid milestone, with a $3 CAD minimum fee.</p>
           <p>
-            No fee to browse or post. No worker platform fee. No subscription to
-            remember. The client sees the full payment total before going to
-            Stripe.
+            {config?.pricingEnabled
+              ? "Standard poster pricing. Browsing, posting and applications are free. Worker fees and optional subscriptions are listed above. Both parties see their fee before agreeing to work."
+              : "No fee to browse or post. No worker platform fee. No subscription to remember. The client sees the full payment total before going to Stripe."}
           </p>
           <ul className="check-list">
             <li>
@@ -348,24 +368,63 @@ export function Pricing() {
               </select>
             </label>
           </div>
+          {config?.pricingEnabled && (
+            <div className="form-stack">
+              <label>
+                Poster plan
+                <select
+                  aria-label="Poster plan"
+                  value={posterPlan}
+                  onChange={(e) => setPosterPlan(e.target.value as Plan)}
+                >
+                  {Object.entries(PLANS).map(([id, p]) => (
+                    <option key={id} value={id}>
+                      {p.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Worker plan
+                <select
+                  aria-label="Worker plan"
+                  value={workerPlan}
+                  onChange={(e) => setWorkerPlan(e.target.value as Plan)}
+                >
+                  {Object.entries(PLANS).map(([id, p]) => (
+                    <option key={id} value={id}>
+                      {p.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+          )}
           <dl className="price-breakdown">
             <div>
               <dt>Worker receives</dt>
-              <dd>{money(worker)}</dd>
+              <dd>{money(worker - workerFees)}</dd>
             </div>
             <div>
-              <dt>SaladFinder service fee</dt>
+              <dt>Poster service fee</dt>
               <dd>{money(fee)}</dd>
             </div>
+            {config?.pricingEnabled && (
+              <div>
+                <dt>Worker service fee (deducted)</dt>
+                <dd>{money(workerFees)}</dd>
+              </div>
+            )}
             <div className="total">
               <dt>Client total</dt>
               <dd>{money(worker + fee)} CAD</dd>
             </div>
           </dl>
           <p className="small-text">
-            Before any applicable taxes. Job maximum: $5,000 CAD in worker pay.
-            Final amounts are calculated for each milestone, so rounding can
-            differ if you split the total unevenly.
+            Excludes monthly subscriptions and any applicable taxes. Job
+            maximum: $5,000 CAD in gross worker pay. Final amounts are
+            calculated for each milestone, so rounding can differ if you split
+            the total unevenly.
           </p>
           {worker > 500000 && (
             <Alert>
@@ -621,16 +680,31 @@ export function InfoPage({ kind }: { kind: "trust" | "terms" | "privacy" }) {
           <h2>Work agreements and payments</h2>
           <p>
             Clients and workers agree on the scope, worker pay, and milestones.
-            Workers submit completed work; clients approve and pay.
-            SaladFinder’s service fee is 12% plus $1 CAD per milestone, with a
-            $3 CAD minimum, charged to the client. Payment and payout processing
-            is provided by Stripe under its applicable terms.
+            Workers submit completed work; clients approve and pay. The pricing
+            page lists current poster and worker fees. Poster fees are added to
+            the client payment and worker fees are deducted from gross earnings.
+            Fees are shown before posting or applying and retained for that
+            agreement, including older jobs at their original rates. Payment and
+            payout processing is provided by Stripe under its applicable terms.
           </p>
           <p>
             Approval is not payment. Payment is not confirmation that a bank has
             received a payout. Work is not held in escrow, guaranteed, or funded
             in advance. A worker’s tax obligations and expenses remain separate
             from the listed gross pay.
+          </p>
+          <h2>Optional monthly subscriptions</h2>
+          <p>
+            Economy is CA$10/month and Premium is CA$25/month, where available,
+            plus applicable taxes. Both renew monthly until canceled through
+            account billing management. Each subscription changes only that
+            account’s fees for future postings and applications. Existing
+            agreements keep their recorded rates. Cancellation at period end
+            retains the paid term; failed renewals or billing risk can suspend
+            discounts. Subscription refunds are reviewed by support subject to
+            applicable rights. Unlimited postings and applications remain
+            subject to anti-abuse rate limits. No plan guarantees savings, jobs
+            or earnings.
           </p>
           <h2>Disputes and cancellations</h2>
           <p>

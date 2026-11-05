@@ -74,9 +74,17 @@ Install secrets with `npx wrangler secret put SECRET_NAME`. The public site key 
 
 ## Revenue model and limits
 
-The customer pays a service fee of **12% + CA$1 per milestone**, minimum CA$3, in addition to the worker's agreed gross amount. At the initial CA$25 minimum milestone, the fee is CA$4. Workers have no SaladFinder platform fee. The initial model absorbs platform Stripe payment/payout fees. Taxes and worker service invoicing require operator configuration/review before launch.
+New agreements use the following configured CAD fees. Each account's own plan applies independently to its poster and worker fees.
 
-A modelled CA$100 milestone yields about CA$7.17 after the published domestic-card/Connect cost assumptions and active-worker allocation. Support, acquisition, losses, tax and founder labour are excluded; profitability depends on real volume and costs. Details, sensitivities and official sources are in [research](docs/research.md).
+| Plan | Monthly | Poster fee per milestone | Worker fee per milestone |
+| --- | ---: | --- | --- |
+| Standard | Free | 14.9% + $1, minimum $3 | 7.9% + $1 |
+| Economy | $10 | 8.9% + $0.50, minimum $1.50 | 5.4% + $0.50 |
+| Premium | $25 | 3.9% + $1.30 | 3.9% + $1.30 |
+
+The poster pays gross work value plus their fee; the worker receives gross minus their fee. There is no additional SaladFinder fee on withdrawal. All tiers include unlimited postings and applications, subject to abuse controls. Paid plans renew monthly until canceled. Benefits apply to new postings/applications after verified payment; existing agreements retain their recorded fees. Legacy jobs retain the original 12% + $1 poster fee (minimum $3) and zero worker fee.
+
+These are fixed service rates, not a reimbursement of each payment's actual Stripe costs. Revenue must also cover processing, Connect, hosting, support, refunds/losses and taxes; profitability is not guaranteed. Earlier financial modelling in [research](docs/research.md) describes the original pricing and is not a forecast for these tiers. See [subscription implementation and operations](docs/SUBSCRIPTIONS-DESIGN.md) for activation gates and verification status.
 
 ## Architecture and operations
 

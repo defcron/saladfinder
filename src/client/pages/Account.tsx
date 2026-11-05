@@ -1,3 +1,4 @@
+import { BillingPanel } from "../billing";
 import { useEffect, useState, type FormEvent } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { ArrowRight, ExternalLink, RefreshCw, ShieldCheck } from "lucide-react";
@@ -251,6 +252,7 @@ export function Account() {
       <PageHeading title="Make yourself at home.">
         <p>Your profile, payment setup, and payout history.</p>
       </PageHeading>
+      <BillingPanel />
       <div className="account-layout">
         <section className="content-section">
           <h2>Your profile</h2>

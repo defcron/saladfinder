@@ -20,6 +20,10 @@ export type Config = {
   authReady: boolean;
   paymentsReady: boolean;
   instantPayoutsEnabled?: boolean;
+  pricingEnabled?: boolean;
+  subscriptionsReady?: boolean;
+  pricingVersion?: string;
+  plan?: import("../shared/pricing").Plan;
   paymentMode: "test" | "live" | null;
   turnstileSiteKey: string;
   supportEmail: string;
@@ -27,6 +31,7 @@ export type Config = {
 };
 export type Job = {
   id: string;
+  fee_plan?: import("../shared/pricing").FeePlan;
   poster_id: string;
   worker_id: string | null;
   title: string;
@@ -47,6 +52,7 @@ export type Milestone = {
   id: string;
   job_id: string;
   title: string;
+  worker_fee_cents?: number;
   amount_cents: number;
   position: number;
   status: string;
@@ -57,6 +63,7 @@ export type Application = {
   id: string;
   job_id: string;
   job_title?: string;
+  fee_plan?: import("../shared/pricing").FeePlan;
   worker_id: string;
   worker_name?: string;
   worker_bio?: string;
@@ -83,6 +90,8 @@ export type Review = {
   created_at: string;
 };
 export type JobDetail = {
+  workerFeeQuotes?: Record<string, number>;
+  workerFeePlan?: import("../shared/pricing").FeePlan;
   job: Job;
   milestones: Milestone[];
   applications?: Application[];

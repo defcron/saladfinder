@@ -403,6 +403,40 @@ describe("payment ownership, ledger and Stripe event reconciliation", () => {
     );
   }
 
+  it("collects both recorded fees, preserves retries, and reconciles the exact combined application fee", async () => {
+    await env.DB.prepare(
+      "UPDATE milestones SET fee_cents=1590,worker_fee_cents=890 WHERE id='milestone'",
+    ).run();
+    const session = await checkout();
+    const params = fixture.stripe.checkout.sessions.create.mock.calls[0]![0];
+    expect(params.payment_intent_data?.application_fee_amount).toBe(2480);
+    expect(params.line_items?.[1].price_data?.unit_amount).toBe(1590);
+    expect(
+      await row(
+        "SELECT amount_cents,fee_cents,worker_fee_cents FROM payment_attempts",
+      ),
+    ).toMatchObject({
+      amount_cents: 10000,
+      fee_cents: 1590,
+      worker_fee_cents: 890,
+    });
+    await env.DB.prepare(
+      "UPDATE milestones SET fee_cents=9999,worker_fee_cents=9999 WHERE id='milestone'",
+    ).run();
+    expect((await request("/milestones/milestone/checkout")).status).toBe(200);
+    expect(fixture.stripe.checkout.sessions.create).toHaveBeenCalledTimes(1);
+    session.amount_total = 11590;
+    const intent = fixture.intents.get(session.payment_intent as string)!;
+    intent.amount = 11590;
+    intent.amount_received = 11590;
+    expect((await notify("checkout.session.completed", session)).status).toBe(
+      200,
+    );
+    expect(await row("SELECT status FROM payment_attempts")).toMatchObject({
+      status: "paid",
+    });
+  });
+
   // One scenario, one router and one ledger implementation. Only the deployment
   // mode, credential and provider object mode change; no real Stripe calls here.
   it.each(["test", "live"] as const)(

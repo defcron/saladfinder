@@ -100,7 +100,11 @@ export function Home() {
           <MapPin size={29} strokeWidth={1.5} aria-hidden="true" />
           <div>
             <h2>Made for Ontario</h2>
-            <p>CAD payments · No worker platform fee</p>
+            <p>
+              {config?.pricingEnabled
+                ? "CAD payments · Clear fees before you agree"
+                : "CAD payments · No worker platform fee"}
+            </p>
           </div>
         </aside>
       </section>

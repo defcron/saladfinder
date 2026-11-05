@@ -1,4 +1,8 @@
 interface Env {
+  PRICING_ENABLED?: string;
+  SUBSCRIPTIONS_ENABLED?: string;
+  STRIPE_ECONOMY_PRICE?: string;
+  STRIPE_PREMIUM_PRICE?: string;
   ADMIN_EMAILS?: string;
   STRIPE_SECRET_KEY?: string;
   STRIPE_WEBHOOK_SECRET?: string;

@@ -6,6 +6,8 @@ import { ZodError } from "zod";
 import { auth, loadUser } from "./auth";
 import { marketplace } from "./marketplace";
 import { listingsEnabled, originGuard } from "./middleware";
+import { billing, billingReady, currentPlan } from "./billing";
+import { PLANS, PRICING_VERSION } from "../shared/pricing";
 import { payments } from "./payments";
 import { stripeConfigured, stripeMode } from "./stripe-environment";
 import { isSignInReady } from "./email";
@@ -46,7 +48,7 @@ app.get("/api/health", async (c) => {
     mode: c.env.LAUNCH_MODE,
   });
 });
-app.get("/api/config", (c) =>
+app.get("/api/config", async (c) =>
   c.json({
     launchMode: c.env.LAUNCH_MODE,
     listingsReady:
@@ -59,12 +61,23 @@ app.get("/api/config", (c) =>
     paymentsReady: c.env.LAUNCH_MODE === "live" && stripeConfigured(c.env),
     turnstileSiteKey: c.env.TURNSTILE_SITE_KEY,
     supportEmail: c.env.SUPPORT_EMAIL,
-    fee: { percent: 12, fixedCents: 100, minimumCents: 300 },
+    pricingEnabled: c.env.PRICING_ENABLED === "true",
+    pricingVersion: PRICING_VERSION,
+    plans: PLANS,
+    subscriptionsReady: billingReady(c.env),
+    plan: c.get("user")
+      ? await currentPlan(c.env.DB, c.get("user")!.id)
+      : "standard",
+    fee:
+      c.env.PRICING_ENABLED === "true"
+        ? { percent: 14.9, fixedCents: 100, minimumCents: 300 }
+        : { percent: 12, fixedCents: 100, minimumCents: 300 },
   }),
 );
 app.route("/api", auth);
 app.route("/api", marketplace);
 app.route("/api", payments);
+app.route("/api", billing);
 app.all("/api/*", (c) => c.json({ error: "API endpoint not found." }, 404));
 app.onError((error, c) => {
   if (error instanceof HTTPException)

@@ -32,6 +32,7 @@ export interface User {
 }
 export interface Job {
   id: string;
+  fee_plan?: import("./pricing").FeePlan;
   poster_id: string;
   worker_id: string | null;
   title: string;
@@ -53,6 +54,7 @@ export interface Milestone {
   id: string;
   job_id: string;
   title: string;
+  worker_fee_cents?: number;
   amount_cents: number;
   position: number;
   status: MilestoneStatus;
@@ -63,8 +65,10 @@ export interface Milestone {
   fee_cents?: number | null;
 }
 export interface Application {
+  worker_fee_snapshot?: string;
   id: string;
   job_id: string;
+  fee_plan?: import("./pricing").FeePlan;
   worker_id: string;
   message: string;
   status: "pending" | "accepted" | "declined" | "withdrawn";
@@ -99,6 +103,10 @@ export interface Config {
   authReady: boolean;
   paymentsReady: boolean;
   instantPayoutsEnabled?: boolean;
+  pricingEnabled?: boolean;
+  subscriptionsReady?: boolean;
+  pricingVersion?: string;
+  plan?: import("./pricing").Plan;
   turnstileSiteKey: string;
   supportEmail: string;
   fee: { percent: number; fixedCents: number; minimumCents: number };

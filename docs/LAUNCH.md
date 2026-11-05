@@ -74,6 +74,6 @@ Use D1 Time Travel and take protected exports before migrations. Exports contain
 
 ## Business viability
 
-Default fee: customer pays 12% + CA$1 per approved milestone (minimum CA$3), added to worker pay. Initial app minimum is CA$25 per milestone. A worker receives the displayed gross milestone amount; the platform absorbs its published Stripe payment/payout fees under this proposed model. Confirm the contract before launch.
+New Standard agreements charge posters 14.9% + CA$1 (minimum CA$3) and deduct 7.9% + CA$1 from worker gross. Economy and Premium rates, monthly prices, grandfathering and activation requirements are documented in [subscriptions](./SUBSCRIPTIONS-DESIGN.md). The minimum milestone is CA$25. Display gross, fee and net before consent; do not promise that gross is the worker's bank receipt. Existing legacy jobs retain their original fees.
 
 The illustrative CA$100 milestone contribution is about CA$7.17 before other expenses with a worker paid four times that month. It is a model, not earned income. Start in one neighbourhood/category, manually recruit a small customer/worker cohort, and measure completed paid milestones, repeat use, acquisition cost, time spent on support and net loss rate. Neither code nor low hosting cost creates demand.
