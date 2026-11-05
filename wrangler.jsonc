@@ -85,12 +85,12 @@
       ],
     },
     "staging": {
-      "name": "daywork-staging",
+      "name": "saladfinder-staging",
       "routes": [],
       "vars": {
         "APP_ENV": "staging",
         "STRIPE_MODE": "test",
-        "APP_URL": "https://daywork-staging.defcronyke.workers.dev",
+        "APP_URL": "https://saladfinder-staging.defcronyke.workers.dev",
         "LAUNCH_MODE": "live",
         "INSTANT_PAYOUTS_ENABLED": "true",
         "LISTINGS_ENABLED": "true",

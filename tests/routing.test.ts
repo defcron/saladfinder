@@ -143,7 +143,7 @@ describe("canonical public routing", () => {
     "http://localhost:8787",
     "http://127.0.0.1:8787",
     "http://[::1]:8787",
-    "https://daywork-staging.defcronyke.workers.dev",
+    "https://saladfinder-staging.defcronyke.workers.dev",
     "https://kycaml.saladfinder.com",
     "https://saladfinder.pages.dev.attacker.example",
     "https://saladfinder.pages.dev:8443",

@@ -19,7 +19,7 @@ flowchart LR
 
 | Setting | Staging | Production |
 | --- | --- | --- |
-| Worker | `daywork-staging` | `daywork` |
+| Worker | `saladfinder-staging` | `daywork` |
 | Entry point | `src/server/index.ts` | `src/server/index.ts` |
 | `STRIPE_MODE` | `test` | `live` |
 | Stripe credential | Restricted key from managed `SaladFinder staging` sandbox | Restricted live key for the account inside `saladfinder` |
@@ -84,11 +84,25 @@ Additional tests reject mismatched credentials before provider calls and check
 that deployment configuration keeps the shared entry point and isolated storage.
 These local tests simulate the provider and do not move live money.
 
+## Staging hostname migration — 2026-11-05
+
+The existing Worker was renamed in place to `saladfinder-staging` and redeployed
+at <https://saladfinder-staging.defcronyke.workers.dev>. Its immutable Worker ID,
+encrypted secrets and D1 binding were preserved. The D1 database keeps its legacy
+name `daywork-staging`; no records were migrated. Turnstile permits the new host.
+
+Stripe's two sandbox webhook destinations still need their endpoint URLs updated
+to the new hostname. The dashboard rejected the save with HTTP 403 and redirected
+to sign-in after refresh. The existing destination IDs and signing secrets should
+be retained. Until both URLs are saved and delivery is verified, this migration is
+not accepted for end-to-end sandbox payments. Generate fresh onboarding links and
+sign in again on the new host; old links and cookies reference the previous host.
+
 ## Provider acceptance checkpoint — 2026-11-05
 
 The managed sandbox and restricted credential are created. Both snapshot webhook
 destinations are active, use API version `2026-10-28.endive`, and have distinct
-encrypted signing secrets on `daywork-staging`. The deployed staging app created
+encrypted signing secrets on `saladfinder-staging`. The deployed staging app created
 a Canadian Accounts v2 recipient, set manual payouts and generated hosted
 onboarding links. Its status route retrieved recipient capabilities, connected
 balance, payout history, external accounts and payout settings using the

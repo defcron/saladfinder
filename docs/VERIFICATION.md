@@ -1,3 +1,12 @@
+## 2026-11-05 staging Worker rename
+
+- Renamed the existing Cloudflare Worker to `saladfinder-staging` in place; preserved its immutable ID, five encrypted secrets and isolated D1 binding. The database retains its legacy `daywork-staging` name and data.
+- Updated Wrangler staging name and `APP_URL`, Turnstile allowed hostname and the routing regression fixture. Deployed version `a3c0b8c5-8d83-4a7b-a32b-f2ab38c62be4` at <https://saladfinder-staging.defcronyke.workers.dev>.
+- `npm run check` passed 195 tests, typechecking and build; coverage passed at 93.65% lines; all 18 desktop/mobile browser tests passed. Deployment parity passed with unchanged executable SHA-256 `4ba249e28540e5fa2238cdb870b3fefb9122f2b812320e9cbe2cfee829253aac`.
+- New staging `/api/config` returned HTTP 200 with `paymentMode=test`, `launchMode=live`, `authReady=true` and `paymentsReady=true`. These configuration flags do not prove webhook delivery or completed financial operations.
+- Updating the Stripe sandbox payment webhook URL failed with HTTP 403. Refresh revealed an expired dashboard session. Both sandbox destination URLs remain on the old hostname pending sign-in; do not claim end-to-end staging payment acceptance until they are updated and tested.
+- Production remains `LAUNCH_MODE=preview`, `paymentMode=live`, `paymentsReady=false`. The operator launch requirements and actual sandbox financial acceptance are unresolved; no real charge or payout was made.
+
 ## 2026-11-05 shared payment runtime and isolated sandbox deployment
 
 - Removed environment-name branches from the financial handlers. The same Stripe SDK, payment router and ledger run in both deployments. `STRIPE_MODE=test|live` is a deployment-level credential guard; Stripe's sandbox supplies the simulation. No fake provider is deployed.
