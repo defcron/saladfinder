@@ -93,6 +93,16 @@ export function Layout({ children }: { children: ReactNode }) {
           </div>
         </nav>
       </header>
+      {config?.paymentMode === "test" && (
+        <div
+          className="payment-test-notice"
+          role="note"
+          aria-label="Test payments"
+        >
+          <strong>Test environment.</strong> Payments and payouts are simulated.
+          No real money moves. Do not perform work from these test listings.
+        </div>
+      )}
       {logoutError && (
         <div className="page-wrap">
           <Alert>{logoutError}</Alert>

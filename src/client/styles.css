@@ -2472,3 +2472,13 @@ code {
     object-fit: cover;
   }
 }
+
+.payment-test-notice {
+  padding: 0.85rem 1.5rem;
+  color: #422006;
+  background: #fef3c7;
+  border-bottom: 1px solid #d97706;
+  text-align: center;
+  font-size: 0.9rem;
+  line-height: 1.5;
+}

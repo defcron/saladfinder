@@ -83,3 +83,5 @@ A modelled CA$100 milestone yields about CA$7.17 after the published domestic-ca
 `src/client` contains the React interface, `src/server` the Hono API, and `src/shared` shared types/fee helpers. `migrations` contains D1 schema versions. Vite builds static assets; Wrangler deploys one Worker with D1 and static-asset bindings. Identity and payment details are collected by Stripe; the app stores only the required provider IDs and operational ledger.
 
 Read [API](docs/API.md), [operations](docs/OPERATIONS.md), [launch](docs/LAUNCH.md), [security](SECURITY.md), and [verification](docs/VERIFICATION.md). Product terms and privacy pages start as prelaunch disclosures, not a claim of legal review. SaladFinder is the selected product name; business registration and trademark clearance are still outstanding.
+
+Staging uses the same payment handlers, Stripe SDK and ledger as production. Stripe's managed sandbox simulates the financial operations; there is no separate deployed staging payment engine. See [the staging architecture and acceptance checkpoint](docs/STAGING.md).

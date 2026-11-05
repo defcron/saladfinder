@@ -31,6 +31,7 @@ describe("assembled Worker", () => {
 
   it("returns accurate production readiness without exposing secrets or local sign-in", async () => {
     fixture.env.APP_ENV = "production";
+    fixture.env.STRIPE_MODE = "live";
     fixture.env.APP_URL = "https://daywork.example";
     fixture.env.STRIPE_SECRET_KEY = "sk_test_never_return_this";
     fixture.env.RESEND_API_KEY = "re_never_return_this";

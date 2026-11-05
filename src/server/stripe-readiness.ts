@@ -1,4 +1,5 @@
 import type Stripe from "stripe";
+import { assertStripeMode } from "./stripe-environment";
 
 const paymentEvents = [
   "checkout.session.completed",
@@ -23,7 +24,7 @@ const payoutEvents = [
 
 /** Bounded, read-only diagnostics. Never return provider payloads, secrets or error messages. */
 export async function stripeReadiness(stripe: Stripe, env: Env) {
-  const live = /^(sk|rk)_live_/.test(env.STRIPE_SECRET_KEY ?? "");
+  const live = assertStripeMode(env) === "live";
   const origin = new URL(env.APP_URL).origin;
   const probes = {
     platform: async () => {

@@ -33,6 +33,7 @@
   },
   "vars": {
     "APP_ENV": "production",
+    "STRIPE_MODE": "live",
     "FRONTEND_ORIGIN": "https://saladfinder.defcron.chatgpt.site",
     "APP_URL": "https://saladfinder.com",
     "LAUNCH_MODE": "preview",
@@ -63,6 +64,7 @@
       "routes": [],
       "vars": {
         "APP_ENV": "local",
+        "STRIPE_MODE": "test",
         "APP_URL": "http://127.0.0.1:8787",
         "LAUNCH_MODE": "live",
         "INSTANT_PAYOUTS_ENABLED": "true",
@@ -87,8 +89,10 @@
       "routes": [],
       "vars": {
         "APP_ENV": "staging",
+        "STRIPE_MODE": "test",
         "APP_URL": "https://daywork-staging.defcronyke.workers.dev",
-        "LAUNCH_MODE": "preview",
+        "LAUNCH_MODE": "live",
+        "INSTANT_PAYOUTS_ENABLED": "true",
         "LISTINGS_ENABLED": "true",
         "EMAIL_PROVIDER": "cloudflare",
         "EMAIL_FROM": "SaladFinder <login@saladfinder.com>",

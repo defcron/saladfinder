@@ -19,6 +19,7 @@ export type Config = {
   region: string;
   authReady: boolean;
   paymentsReady: boolean;
+  paymentMode: "test" | "live" | null;
   turnstileSiteKey: string;
   supportEmail: string;
   fee: { percent: number; fixedCents: number; minimumCents: number };

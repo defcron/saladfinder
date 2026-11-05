@@ -6,6 +6,7 @@ const env = {
   APP_URL: "https://saladfinder.example",
   STRIPE_SECRET_KEY: "rk_live_fixture",
   LAUNCH_MODE: "preview",
+  STRIPE_MODE: "live",
 } as Env;
 function fixture() {
   const endpoints = ["stripe", "stripe-connect"].map((path) => ({

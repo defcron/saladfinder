@@ -17,7 +17,8 @@
     "cf:types": "wrangler types --strict-vars=false",
     "deploy:check": "npm run build && wrangler deploy --dry-run",
     "check": "npm run typecheck && npm test && npm run build",
-    "deploy": "npm run check && npm run db:remote && wrangler deploy"
+    "deploy": "npm run check && npm run db:remote && wrangler deploy",
+    "check:deployment-parity": "node scripts/check-deployment-parity.mjs"
   },
   "keywords": [],
   "type": "module",

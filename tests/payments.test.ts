@@ -49,7 +49,7 @@ const admin: User = {
 };
 const people: Record<string, User> = { worker, poster, admin };
 
-function fakeStripe() {
+function fakeStripe(live = false) {
   const sessions = new Map<string, Stripe.Checkout.Session>();
   const intents = new Map<string, Stripe.PaymentIntent>();
   const payouts = new Map<string, Stripe.Payout>();
@@ -132,7 +132,7 @@ function fakeStripe() {
             net_available: [{ destination: "card_eligible", amount: 100000 }],
           },
         ],
-        livemode: false,
+        livemode: live,
       })),
     },
     balanceSettings: {
@@ -161,7 +161,7 @@ function fakeStripe() {
               amount: 11300,
               amount_received: 11300,
               currency: "cad",
-              livemode: false,
+              livemode: live,
               status: "succeeded",
               application_fee_amount:
                 params.payment_intent_data!.application_fee_amount,
@@ -183,7 +183,7 @@ function fakeStripe() {
               mode: "payment",
               amount_total: 11300,
               currency: "cad",
-              livemode: false,
+              livemode: live,
               payment_intent: intent.id,
               metadata: params.metadata,
               url: `https://checkout.stripe.com/c/pay/${attempt}`,
@@ -275,6 +275,7 @@ describe("payment ownership, ledger and Stripe event reconciliation", () => {
   beforeEach(async () => {
     Object.assign(env, {
       APP_ENV: "local",
+      STRIPE_MODE: "test",
       APP_URL: "http://localhost",
       LAUNCH_MODE: "live",
       INSTANT_PAYOUTS_ENABLED: "true",
@@ -402,6 +403,230 @@ describe("payment ownership, ledger and Stripe event reconciliation", () => {
     );
   }
 
+  // One scenario, one router and one ledger implementation. Only the deployment
+  // mode, credential and provider object mode change; no real Stripe calls here.
+  it.each(["test", "live"] as const)(
+    "runs the identical onboarding, Checkout, payout and refund lifecycle in %s mode",
+    async (mode) => {
+      const live = mode === "live";
+      env.APP_ENV = live ? "production" : "staging";
+      env.STRIPE_MODE = mode;
+      env.STRIPE_SECRET_KEY = `rk_${mode}_parity_fixture`;
+      fixture = fakeStripe(live);
+      const originalAccount = worker.stripe_account_id;
+      try {
+        worker.stripe_account_id = null;
+        await env.DB.prepare(
+          "UPDATE users SET stripe_account_id = NULL WHERE id = 'worker'",
+        ).run();
+        expect((await request("/payments/onboard", "worker")).status).toBe(200);
+        expect((await request("/payments/onboard", "worker")).status).toBe(200);
+        expect(fixture.accounts.size).toBe(1);
+        expect(fixture.stripe.v2.core.accounts.create).toHaveBeenCalledTimes(1);
+        expect(
+          fixture.stripe.v2.core.accounts.create.mock.calls[0]![0],
+        ).toMatchObject({
+          dashboard: "express",
+          identity: { country: "ca" },
+          configuration: {
+            recipient: {
+              capabilities: {
+                stripe_balance: { stripe_transfers: { requested: true } },
+              },
+            },
+          },
+        });
+        expect(
+          await row(
+            "SELECT account_id FROM connect_intents WHERE user_id = 'worker'",
+          ),
+        ).toMatchObject({ account_id: "acct_worker" });
+      } finally {
+        worker.stripe_account_id = originalAccount;
+      }
+      const status = await (
+        await request("/payments/status", "worker", {}, "GET")
+      ).json();
+      expect(status).toMatchObject({
+        configured: true,
+        testMode: !live,
+        accountReady: true,
+        defaultPayoutMethod: "instant",
+        standardEligible: true,
+      });
+      expect(
+        (await request("/milestones/milestone/checkout", "worker")).status,
+      ).toBe(403);
+      const session = await checkout();
+      await checkout();
+      expect(fixture.sessions.size).toBe(1);
+      expect(
+        fixture.stripe.checkout.sessions.create.mock.calls[0]![0]
+          .payment_intent_data,
+      ).toMatchObject({
+        application_fee_amount: 1300,
+        transfer_data: { destination: "acct_worker" },
+      });
+      expect(await row("SELECT status FROM milestones")).toMatchObject({
+        status: "checkout_pending",
+      });
+      expect(
+        (await notify("checkout.session.completed", session, { live: !live }))
+          .status,
+      ).toBe(400);
+      expect(
+        (
+          await notify("checkout.session.completed", session, {
+            live,
+            invalidSignature: true,
+          })
+        ).status,
+      ).toBe(400);
+      expect(
+        (
+          await notify("checkout.session.completed", session, {
+            live,
+            id: "evt_parity_paid",
+          })
+        ).status,
+      ).toBe(200);
+      expect(
+        await (
+          await notify("checkout.session.completed", session, {
+            live,
+            id: "evt_parity_paid",
+          })
+        ).json(),
+      ).toMatchObject({ duplicate: true });
+      expect(await row("SELECT status FROM payment_attempts")).toMatchObject({
+        status: "paid",
+      });
+      expect(await row("SELECT status FROM jobs")).toMatchObject({
+        status: "completed",
+      });
+      for (const method of ["instant", "standard"] as const) {
+        const input = {
+          method,
+          amount_cents: 1000,
+          requestId: crypto.randomUUID(),
+        };
+        expect(
+          (await request("/payments/payout", "poster", input)).status,
+        ).toBe(409);
+        expect(
+          (await request("/payments/payout", "worker", input)).status,
+        ).toBe(200);
+        expect(
+          (await request("/payments/payout", "worker", input)).status,
+        ).toBe(200);
+        const payout = [...fixture.payouts.values()].find(
+          (p) => p.method === method,
+        )!;
+        expect(payout.destination).toBe(
+          method === "instant" ? "card_eligible" : "ba_standard",
+        );
+        payout.status = "paid";
+        const event = {
+          live,
+          connected: true,
+          account: "acct_worker",
+          id: `evt_parity_${method}`,
+        };
+        expect((await notify("payout.paid", payout, event)).status).toBe(200);
+        expect(
+          await (await notify("payout.paid", payout, event)).json(),
+        ).toMatchObject({ duplicate: true });
+        // An older event cannot regress canonical provider state.
+        expect(
+          (
+            await notify(
+              "payout.created",
+              { ...payout, status: "pending" },
+              { ...event, id: event.id + "_late" },
+            )
+          ).status,
+        ).toBe(200);
+        expect(
+          await row(
+            `SELECT status FROM payout_intents WHERE request_id = '${input.requestId}'`,
+          ),
+        ).toMatchObject({ status: "paid" });
+      }
+      expect(fixture.payouts.size).toBe(2);
+      expect(
+        (
+          await request("/admin/milestones/milestone/refund", "poster", {
+            reason: "Parity refund",
+          })
+        ).status,
+      ).toBe(403);
+      expect(
+        (
+          await request("/admin/milestones/milestone/refund", "admin", {
+            reason: "Parity refund",
+          })
+        ).status,
+      ).toBe(200);
+      expect(
+        (
+          await request("/admin/milestones/milestone/refund", "admin", {
+            reason: "Parity refund retry",
+          })
+        ).status,
+      ).toBe(200);
+      expect(fixture.refunds.size).toBe(1);
+      expect(fixture.stripe.refunds.create.mock.calls[0]![0]).toMatchObject({
+        reverse_transfer: true,
+        refund_application_fee: true,
+      });
+      expect(await row("SELECT status FROM refund_intents")).toMatchObject({
+        status: "succeeded",
+      });
+      expect(await row("SELECT status FROM milestones")).toMatchObject({
+        status: "refunded",
+      });
+      expect(
+        (await notify("checkout.session.completed", session, { live })).status,
+      ).toBe(200);
+      expect(await row("SELECT status FROM milestones")).toMatchObject({
+        status: "refunded",
+      });
+    },
+  );
+
+  it.each(["test", "live"] as const)(
+    "rejects mismatched credentials before any provider call in %s mode, including preview reconciliation",
+    async (mode) => {
+      env.STRIPE_MODE = mode;
+      env.STRIPE_SECRET_KEY =
+        mode === "test" ? "rk_live_fixture" : "rk_test_fixture";
+      for (const path of [
+        "/payments/onboard",
+        "/payments/dashboard",
+        "/milestones/milestone/checkout",
+      ]) {
+        expect((await request(path, "worker")).status).toBe(503);
+      }
+      expect(
+        await (await request("/payments/status", "worker", {}, "GET")).json(),
+      ).toMatchObject({ configured: false, accountReady: false });
+      env.LAUNCH_MODE = "preview";
+      expect(
+        (await notify("customer.created", { id: "cus_fake" })).status,
+      ).toBe(503);
+      await expect(
+        suspendJobPayments(env, "job", () => fixture.client),
+      ).rejects.toThrow("configured payment mode");
+      expect(fixture.stripe.v2.core.accounts.retrieve).not.toHaveBeenCalled();
+      expect(fixture.stripe.balance.retrieve).not.toHaveBeenCalled();
+      expect(fixture.stripe.checkout.sessions.create).not.toHaveBeenCalled();
+      expect(fixture.stripe.checkout.sessions.retrieve).not.toHaveBeenCalled();
+      expect(
+        await row("SELECT COUNT(*) AS count FROM stripe_events"),
+      ).toMatchObject({ count: 0 });
+    },
+  );
+
   it("calculates the posted fee in integer cents including its minimum", () => {
     expect(platformFee(10000)).toBe(1300);
     expect(platformFee(100)).toBe(300);
@@ -416,6 +641,7 @@ describe("payment ownership, ledger and Stripe event reconciliation", () => {
     expect((await request("/milestones/milestone/checkout")).status).toBe(503);
     env.LAUNCH_MODE = "live";
     env.APP_ENV = "production";
+    env.STRIPE_MODE = "live";
     expect((await request("/milestones/milestone/checkout")).status).toBe(503);
     expect(fixture.stripe.checkout.sessions.create).not.toHaveBeenCalled();
   });
@@ -1017,6 +1243,7 @@ describe("payment ownership, ledger and Stripe event reconciliation", () => {
     ).toBe(503);
     env.STRIPE_CONNECT_WEBHOOK_SECRET = "whsec_fixture";
     env.APP_ENV = "production";
+    env.STRIPE_MODE = "live";
     expect(
       (await request("/admin/payments/readiness", "admin", {}, "GET")).status,
     ).toBe(503);
@@ -1066,6 +1293,7 @@ describe("payment ownership, ledger and Stripe event reconciliation", () => {
     });
     expect(standard.status).toBe(200);
     env.STRIPE_SECRET_KEY = "rk_live_fixture";
+    env.STRIPE_MODE = "live";
     const liveStatus = await (
       await request("/payments/status", "worker", {}, "GET")
     ).json();

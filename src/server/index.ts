@@ -5,8 +5,9 @@ import { HTTPException } from "hono/http-exception";
 import { ZodError } from "zod";
 import { auth, loadUser } from "./auth";
 import { marketplace } from "./marketplace";
-import { isLocal, listingsEnabled, originGuard } from "./middleware";
+import { listingsEnabled, originGuard } from "./middleware";
 import { payments } from "./payments";
+import { stripeConfigured, stripeMode } from "./stripe-environment";
 import { isSignInReady } from "./email";
 import { canonicalRedirect } from "./routing";
 import { frontend } from "./frontend";
@@ -53,17 +54,8 @@ app.get("/api/config", (c) =>
     currency: "CAD",
     region: "Ontario",
     authReady: isSignInReady(c.env, c.req.url),
-    paymentsReady:
-      c.env.LAUNCH_MODE === "live" &&
-      Boolean(
-        c.env.STRIPE_SECRET_KEY &&
-        c.env.STRIPE_WEBHOOK_SECRET &&
-        c.env.STRIPE_CONNECT_WEBHOOK_SECRET,
-      ) &&
-      (isLocal(c.env, c.req.url) ||
-        (c.env.APP_ENV === "staging"
-          ? /^(sk|rk|rkcs)_test_/.test(c.env.STRIPE_SECRET_KEY || "")
-          : /^(sk|rk)_live_/.test(c.env.STRIPE_SECRET_KEY || ""))),
+    paymentMode: stripeMode(c.env),
+    paymentsReady: c.env.LAUNCH_MODE === "live" && stripeConfigured(c.env),
     turnstileSiteKey: c.env.TURNSTILE_SITE_KEY,
     supportEmail: c.env.SUPPORT_EMAIL,
     fee: { percent: 12, fixedCents: 100, minimumCents: 300 },

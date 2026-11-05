@@ -20,6 +20,7 @@ export async function makeTestEnv(overrides: Partial<AppBindings> = {}) {
           serviceBindings: { ASSETS: async () => new Response("test asset") },
           bindings: {
             APP_ENV: "local",
+            STRIPE_MODE: "test",
             APP_URL: "http://localhost",
             LAUNCH_MODE: "preview",
             EMAIL_FROM: "",

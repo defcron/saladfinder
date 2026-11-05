@@ -6,6 +6,12 @@ import type { AppEnv } from "./types";
 import { requireAdmin, requireUser, rateLimit } from "./middleware";
 import { feeCents } from "../shared/types";
 import { stripeReadiness } from "./stripe-readiness";
+import {
+  assertStripeMode,
+  stripeConfigured,
+  stripeMode,
+} from "./stripe-environment";
+export { stripeConfigured } from "./stripe-environment";
 
 type Payment = {
   id: string;
@@ -65,36 +71,18 @@ const now = () => new Date().toISOString();
 const objectId = (value: string | { id: string } | null | undefined) =>
   typeof value === "string" ? value : value?.id;
 export const platformFee = feeCents;
-export const stripeConfigured = (env: Env) =>
-  Boolean(
-    env.STRIPE_SECRET_KEY &&
-    env.STRIPE_WEBHOOK_SECRET &&
-    env.STRIPE_CONNECT_WEBHOOK_SECRET,
-  );
-const defaultStripe: StripeFactory = (env) =>
-  new Stripe(env.STRIPE_SECRET_KEY!, {
+const defaultStripe: StripeFactory = (env) => {
+  assertStripeMode(env);
+  return new Stripe(env.STRIPE_SECRET_KEY!, {
     httpClient: Stripe.createFetchHttpClient(),
     maxNetworkRetries: 2,
     timeout: 20000,
   });
+};
 function assertPaymentAccess(env: Env) {
   if (env.LAUNCH_MODE !== "live" || !stripeConfigured(env))
     throw new HTTPException(503, {
       message: "Payments are not enabled. No money has been collected.",
-    });
-  if (
-    env.APP_ENV === "production" &&
-    !/^(sk|rk)_live_/.test(env.STRIPE_SECRET_KEY!)
-  )
-    throw new HTTPException(503, {
-      message: "Live payments are not configured.",
-    });
-  if (
-    env.APP_ENV === "staging" &&
-    !/^(sk|rk|rkcs)_test_/.test(env.STRIPE_SECRET_KEY!)
-  )
-    throw new HTTPException(503, {
-      message: "Staging requires Stripe test-mode credentials.",
     });
 }
 function freshRetry(createdAt: string) {
@@ -276,6 +264,7 @@ export async function suspendJobPayments(
   makeStripe: StripeFactory = defaultStripe,
 ) {
   if (!env.STRIPE_SECRET_KEY) return;
+  assertStripeMode(env);
   const stripe = makeStripe(env);
   const active = await env.DB.prepare(
     "SELECT p.* FROM payment_attempts p JOIN milestones m ON m.id = p.milestone_id WHERE m.job_id = ? AND p.status IN ('creating','open') AND p.checkout_session_id IS NOT NULL",
@@ -380,7 +369,7 @@ export function createPaymentsRouter(
     const user = c.get("user")!;
     await rateLimit(c, "payment-status", user.id, 30, 60);
     const configured = stripeConfigured(c.env) && c.env.LAUNCH_MODE === "live";
-    const testMode = !/^(sk|rk)_live_/.test(c.env.STRIPE_SECRET_KEY ?? "");
+    const testMode = stripeMode(c.env) === "test";
     const pending = await c.env.DB.prepare(
       "SELECT * FROM payout_intents WHERE user_id = ? AND status = 'creating' LIMIT 1",
     )
@@ -415,7 +404,8 @@ export function createPaymentsRouter(
     if (!configured)
       return c.json({
         ...base,
-        message: "Payments are not enabled during private preview.",
+        message:
+          "Payments are not enabled or their configuration needs attention.",
       });
     if (!user.stripe_account_id)
       return c.json({
@@ -1142,6 +1132,7 @@ export function createPaymentsRouter(
         : c.env.STRIPE_WEBHOOK_SECRET;
       if (!secret || !c.env.STRIPE_SECRET_KEY)
         throw new HTTPException(503, { message: "Webhook not configured." });
+      const live = assertStripeMode(c.env) === "live";
       const raw = await c.req.text();
       const stripe = makeStripe(c.env);
       let event: Stripe.Event;
@@ -1156,7 +1147,6 @@ export function createPaymentsRouter(
       } catch {
         throw new HTTPException(400, { message: "Invalid webhook signature." });
       }
-      const live = /^(sk|rk)_live_/.test(c.env.STRIPE_SECRET_KEY);
       if (event.livemode !== live || Boolean(event.account) !== connected)
         throw new HTTPException(400, {
           message: "Wrong webhook mode or account scope.",
