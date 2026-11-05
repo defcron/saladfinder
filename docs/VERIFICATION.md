@@ -1,3 +1,13 @@
+## 2026-11-05 standard-payout launch update
+
+- Production remains open for posting, applications, hiring, work messages, approved-milestone Checkout and eligible standard bank payout requests. The operator requested that Instant Payouts be labelled **Coming later** until Stripe eligibility permits activation; no date or transaction threshold is promised.
+- The existing server gate remains disabled in production. Public configuration and payment status now expose `instantPayoutsEnabled`; the frontend uses this same configuration for homepage, job details, pricing, payment guidance, account setup and payout selection. Missing flags fail closed. Existing payout recovery remains intact. Staging keeps the flag enabled for sandbox acceptance with identical executable code.
+- `npm run check` passed all 195 tests, typechecking and production build. Coverage passed at 93.65% lines, 92.37% statements, 88.13% branches and 93.93% functions. All 20 desktop/mobile browser tests passed, including disabled instant selection despite stale eligibility/default hints, standard payout submission and public coming-later copy.
+- Deployment parity passed: identical production/staging executable SHA-256 `1f2eca05c3c5abcc7d28c17a002ecbbce2c1bddb6f13353b79f4331725818300`.
+- Sites version **4** published successfully at <https://saladfinder.defcron.chatgpt.site>; artifact commit `ba9acd3562d3d581e4e2277ffc7f3c336b0eb707` is mirrored to GitHub `frontend-deploy`. Production Worker version `7a20d635-2cf8-4619-b182-20fe83d757ae`; staging version `e71c05d7-b810-46d3-9882-a8f88620dac7`.
+- Live HTTP config confirms production `launchMode=live`, `paymentMode=live`, `paymentsReady=true`, `instantPayoutsEnabled=false`; staging reports test mode with instant enabled. Native Chrome observed the updated coming-later homepage and account notice at the canonical apex.
+- This release made no real-money transaction. Prior sandbox evidence and remaining provider-verification boundaries are recorded immediately below. Real payment settlement and bank receipt remain to be observed through actual authorized use.
+
 ## 2026-11-05 operator-authorized paid pilot
 
 - The operator confirmed completion of their business-name/registration, policy, worker/tax/insurance and support/balance-monitoring items. This is operator attestation, not independent legal verification.

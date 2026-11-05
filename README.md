@@ -2,14 +2,14 @@
 
 # SaladFinder
 
-**Current checkpoint:** the canonical preview and email binding are deployed at `www.saladfinder.com`, and the apex now redirects there with verified HTTPS. The real posting-and-application pilot is deployed. Hiring, work and money movement remain disabled; native email-code delivery is verified, while the complete production account sign-in cycle remains unverified. See [the current checkpoint](docs/PAUSED.md).
+An Ontario/CAD local-services marketplace built with React, Cloudflare Workers, D1 and Stripe Connect. Customers can post jobs, choose workers and pay approved milestones through Stripe Checkout. Workers can apply for jobs and request standard bank payouts when their account and funds are eligible.
 
-An Ontario/CAD local-services marketplace built with React, Cloudflare Workers, D1 and Stripe Connect. Its implemented workflow covers job listings, applications and agreed milestones. Once the paid-launch requirements are met, customers can pay approved milestones through Stripe Checkout and eligible workers can request Instant Payouts or choose standard bank payouts, subject to Stripe's actual timing.
+**Launch status: live paid pilot.** Posting, applications, hiring, work messages, milestones, live Checkout and standard bank payout requests are enabled. **Instant Payouts: Coming later** — disabled in production pending Stripe eligibility. No activation date or same-day bank arrival is promised.
 
-**Launch status: public preview.** Real-money transactions are disabled. Live Stripe credentials and both webhook configurations are installed and read-only production connection checks pass. Full payment-provider acceptance and the operator launch checklist remain required. Stripe currently allows CA$0/day of Instant Payouts, so that option is disabled in production. This repository is not evidence that those external steps are complete. See [launch runbook](docs/LAUNCH.md) and [verification record](docs/VERIFICATION.md).
+The operator attested completion of the launch obligations. Core financial flows passed actual managed-sandbox testing; real bank receipt has not yet been observed. See [launch runbook](docs/LAUNCH.md) and [verification record](docs/VERIFICATION.md) for exact coverage and remaining provider checks.
 
 - App: https://saladfinder.com
-- Apex HTTP/HTTPS and previous Workers/Pages page URLs redirect to the canonical `www` hostname, preserving paths and queries ([domain status](docs/DOMAIN.md)).
+- The `www` subdomain redirects to the root, preserving paths and queries ([domain status](docs/DOMAIN.md)).
 - Source: https://github.com/defcron/saladfinder
 - License: [MIT](LICENSE)
 

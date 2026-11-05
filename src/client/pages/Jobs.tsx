@@ -1043,8 +1043,11 @@ export function JobPage() {
             <h3>When will I get paid?</h3>
             <p>
               After a client approves a milestone, they pay through Stripe.
-              Eligible workers can request an instant payout to a supported
-              Canadian debit card. Standard bank payouts take longer.
+              {config?.instantPayoutsEnabled
+                ? "Eligible workers can request an instant payout to a supported Canadian debit card."
+                : "Instant Payouts: Coming later."}{" "}
+              Standard bank payouts use settled available funds and follow
+              Stripe processing and bank timelines.
             </p>
             <Link className="text-link" to="/how-it-works#payments">
               Understand payout timing <ArrowRight size={17} />

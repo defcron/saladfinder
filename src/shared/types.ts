@@ -98,6 +98,7 @@ export interface Config {
   region: string;
   authReady: boolean;
   paymentsReady: boolean;
+  instantPayoutsEnabled?: boolean;
   turnstileSiteKey: string;
   supportEmail: string;
   fee: { percent: number; fixedCents: number; minimumCents: number };

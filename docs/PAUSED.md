@@ -1,3 +1,5 @@
+> Superseded checkpoint: SaladFinder resumed and opened its paid pilot on 2026-11-05. See [LAUNCH.md](LAUNCH.md) and [VERIFICATION.md](VERIFICATION.md) for current status. The rest of this file is historical.
+
 > Domain update (2026-11-04): the canonical site is now **https://saladfinder.com**; earlier www-canonical references below are historical. See [DOMAIN.md](DOMAIN.md).
 
 # Project checkpoint — 2026-11-04

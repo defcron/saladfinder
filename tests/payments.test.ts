@@ -1275,6 +1275,7 @@ describe("payment ownership, ledger and Stripe event reconciliation", () => {
       await request("/payments/status", "worker", {}, "GET")
     ).json();
     expect(status).toMatchObject({
+      instantPayoutsEnabled: false,
       instantEligible: false,
       standardEligible: true,
       defaultPayoutMethod: "standard",
@@ -1298,7 +1299,7 @@ describe("payment ownership, ledger and Stripe event reconciliation", () => {
       await request("/payments/status", "worker", {}, "GET")
     ).json();
     expect((liveStatus as { message: string }).message).toContain(
-      "Instant payouts are unavailable",
+      "Instant Payouts are coming later",
     );
   });
 
@@ -1387,6 +1388,7 @@ describe("payment ownership, ledger and Stripe event reconciliation", () => {
     expect(
       await (await request("/payments/status", "worker", {}, "GET")).json(),
     ).toMatchObject({
+      instantPayoutsEnabled: true,
       instantEligible: false,
       standardEligible: true,
       defaultPayoutMethod: "standard",

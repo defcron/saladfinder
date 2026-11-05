@@ -29,6 +29,7 @@ const payoutStatus = () => ({
   onboardingComplete: true,
   chargesEnabled: true,
   payoutsEnabled: true,
+  instantPayoutsEnabled: true,
   instantEligible: true,
   standardEligible: true,
   defaultPayoutMethod: "instant",
@@ -86,7 +87,11 @@ async function payoutFixture(
     const response = await route.fetch();
     await route.fulfill({
       response,
-      json: { ...(await response.json()), paymentsReady: true },
+      json: {
+        ...(await response.json()),
+        paymentsReady: true,
+        instantPayoutsEnabled: status.instantPayoutsEnabled,
+      },
     });
   });
   await page.route("**/api/payments/status", (route) =>
@@ -370,4 +375,46 @@ test("listing preview shows real applications but prevents hiring and preserves 
     page.getByRole("heading", { name: "Listing preview garden cleanup" }),
   ).toBeVisible();
   await noOverflow(page);
+});
+
+test("disabled instant payouts show coming later and submit only a standard payout", async ({
+  page,
+}) => {
+  const status = payoutStatus();
+  status.instantPayoutsEnabled = false;
+  // Even stale eligibility/default hints must not enable a new instant request.
+  await payoutFixture(page, status);
+  let calls = 0;
+  await page.route("**/api/payments/payout", async (route) => {
+    expect(route.request().postDataJSON().method).toBe("standard");
+    calls++;
+    await route.fulfill({
+      status: 409,
+      json: { error: "Test request stopped before money moves." },
+    });
+  });
+  await page.goto("/account");
+  await expect(page.getByLabel("Payout method")).toHaveValue("standard");
+  await expect(page.locator('option[value="instant"]')).toHaveJSProperty(
+    "disabled",
+    true,
+  );
+  await expect(page.locator('option[value="instant"]')).toHaveText(
+    "Instant Payouts · Coming later",
+  );
+  await expect(
+    page.getByText("Instant-eligible balance:", { exact: false }),
+  ).toHaveCount(0);
+  await page.getByRole("button", { name: "Use available balance" }).click();
+  await expect(page.getByLabel("Amount (CAD)", { exact: true })).toHaveValue(
+    "120.00",
+  );
+  await page.getByRole("button", { name: "Request standard payout" }).click();
+  await expect.poll(() => calls).toBe(1);
+  await page.goto("/how-it-works#payments");
+  await expect(
+    page.getByText("Instant Payouts: Coming later; currently disabled.", {
+      exact: false,
+    }),
+  ).toBeVisible();
 });

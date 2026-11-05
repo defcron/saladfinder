@@ -352,6 +352,12 @@ export function Account() {
                 : "You’re back from Stripe. We’re checking your setup; Stripe may still need more information. Returning here does not itself confirm verification."}
             </Alert>
           )}
+          {!config?.instantPayoutsEnabled && (
+            <Alert kind="info">
+              Instant Payouts: Coming later. Standard bank payouts are available
+              after Stripe setup and funds become eligible.
+            </Alert>
+          )}
           <ActionFeedback {...paymentsAction} />
           {statusError ? (
             <Alert>{statusError}</Alert>
@@ -402,9 +408,12 @@ export function Account() {
                   )}
                   {status.payoutSchedule === "manual" && (
                     <p className="small-text">
-                      Your payouts are set to manual. Request an instant or
-                      standard payout below when funds are eligible; SaladFinder
-                      does not automatically send your balance.
+                      Your payouts are set to manual. Request{" "}
+                      {status.instantPayoutsEnabled
+                        ? "an instant or standard payout"
+                        : "a standard bank payout"}{" "}
+                      below when funds are eligible; SaladFinder does not
+                      automatically send your balance.
                     </p>
                   )}
                   <div className="action-row">
@@ -447,12 +456,20 @@ export function Account() {
                           </strong>
                         </div>
                       </div>
-                      <p className="small-text">
-                        Instant-eligible balance:{" "}
-                        {money(status.balance.instant_available_cents)} CAD. An
-                        eligible balance does not guarantee an instant payout
-                        will be approved.
-                      </p>
+                      {status.instantPayoutsEnabled ? (
+                        <p className="small-text">
+                          Instant-eligible balance:{" "}
+                          {money(status.balance.instant_available_cents)} CAD.
+                          An eligible balance does not guarantee an instant
+                          payout will be approved.
+                        </p>
+                      ) : (
+                        <p className="small-text">
+                          Instant Payouts: Coming later. They are currently
+                          disabled; standard bank payouts remain available when
+                          eligible.
+                        </p>
+                      )}
                       {(status.payoutsEnabled || status.pendingPayout) && (
                         <PayoutForm
                           key={`${user!.id}:${status.accountId || user?.stripe_account_id || "unconnected"}`}

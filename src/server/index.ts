@@ -55,6 +55,7 @@ app.get("/api/config", (c) =>
     region: "Ontario",
     authReady: isSignInReady(c.env, c.req.url),
     paymentMode: stripeMode(c.env),
+    instantPayoutsEnabled: c.env.INSTANT_PAYOUTS_ENABLED === "true",
     paymentsReady: c.env.LAUNCH_MODE === "live" && stripeConfigured(c.env),
     turnstileSiteKey: c.env.TURNSTILE_SITE_KEY,
     supportEmail: c.env.SUPPORT_EMAIL,

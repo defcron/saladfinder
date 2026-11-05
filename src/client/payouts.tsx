@@ -27,6 +27,7 @@ export type PaymentStatus = {
   onboardingComplete: boolean;
   chargesEnabled: boolean;
   payoutsEnabled: boolean;
+  instantPayoutsEnabled?: boolean;
   instantEligible: boolean;
   standardEligible?: boolean;
   defaultPayoutMethod?: PayoutMethod | null;
@@ -85,14 +86,14 @@ export function PayoutForm({
   const [selection, setSelection] = useState<PayoutMethod | null>(null);
   const action = useAction();
   const pending = status.pendingPayout || localAttempt;
-  const preferred =
-    status.defaultPayoutMethod ??
-    (status.instantEligible ? "instant" : "standard");
+  const instantEnabled = status.instantPayoutsEnabled === true;
+  const instantEligible = instantEnabled && status.instantEligible;
+  const preferred = instantEligible
+    ? (status.defaultPayoutMethod ?? "instant")
+    : "standard";
   const method =
     pending?.method ||
-    (selection === "instant" && !status.instantEligible
-      ? "standard"
-      : selection) ||
+    (selection === "instant" && !instantEligible ? "standard" : selection) ||
     preferred;
   const limit = status.payoutLimits?.[method] || {
     minimum_cents: method === "instant" ? 60 : 100,
@@ -105,7 +106,7 @@ export function PayoutForm({
   const maximum = Math.max(0, Math.min(balance, limit.maximum_cents));
   const eligible =
     method === "instant"
-      ? status.instantEligible
+      ? instantEligible
       : (status.standardEligible ??
         (status.accountReady && maximum >= limit.minimum_cents));
   const retryable = status.pendingPayout?.retryable !== false;
@@ -193,8 +194,10 @@ export function PayoutForm({
     >
       <h3>Request a payout</h3>
       <p className="small-text">
-        Instant is selected when eligible. You can choose a standard bank payout
-        instead. Nothing is sent until you confirm a request.
+        {instantEnabled
+          ? "Instant is selected when eligible. You can choose a standard bank payout instead."
+          : "Instant Payouts: Coming later. Standard bank payouts are available when your funds and bank account are eligible."}{" "}
+        Nothing is sent until you confirm a request.
       </p>
       <ActionFeedback {...action} />
       {pending && (
@@ -224,8 +227,10 @@ export function PayoutForm({
           }}
           aria-describedby="payout-method-help"
         >
-          <option value="instant" disabled={!status.instantEligible}>
-            Instant · eligible debit card
+          <option value="instant" disabled={!instantEligible}>
+            {instantEnabled
+              ? "Instant · eligible debit card"
+              : "Instant Payouts · Coming later"}
           </option>
           <option value="standard">Standard bank payout</option>
         </select>
@@ -234,7 +239,8 @@ export function PayoutForm({
         {method === "instant"
           ? "For supported Canadian debit cards. Eligible Instant Payouts usually arrive within 30 minutes; Stripe or bank delays can occur."
           : "Standard bank payouts use settled available funds and follow Stripe’s processing and your bank’s timing. Arrival is not guaranteed for a particular day."}
-        {!status.instantEligible &&
+        {instantEnabled &&
+          !instantEligible &&
           " Instant Payout is unavailable until Stripe confirms an eligible destination and sufficient eligible balance."}
       </p>
       <label>

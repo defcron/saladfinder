@@ -275,6 +275,7 @@ export function Waitlist() {
   );
 }
 export function Pricing() {
+  const { config } = useApp();
   const [pay, setPay] = useState("100");
   const [count, setCount] = useState("1");
   const amount = Math.max(0, Math.round(Number(pay || 0) * 100));
@@ -377,10 +378,11 @@ export function Pricing() {
       <section className="content-section info-band">
         <h2>Fast payments need honest expectations.</h2>
         <p>
-          Your client’s payment and your bank payout are separate. Canadian
-          Instant Payouts require a supported debit card, an eligible Stripe
-          account and balance, and platform availability. Standard bank payouts
-          follow settlement and banking timelines.
+          Your client’s payment and your bank payout are separate.{" "}
+          {config?.instantPayoutsEnabled
+            ? "Canadian Instant Payouts require a supported debit card, an eligible Stripe account and balance, and platform availability."
+            : "Instant Payouts: Coming later. They are currently disabled."}{" "}
+          Standard bank payouts follow settlement and banking timelines.
         </p>
         <Link className="text-link" to="/how-it-works#payments">
           See the payment journey <ArrowRight size={18} />
@@ -390,6 +392,7 @@ export function Pricing() {
   );
 }
 export function HowItWorks() {
+  const { config } = useApp();
   return (
     <section className="page-wrap">
       <PageHeading title="Good work, agreed from the start.">
@@ -443,26 +446,27 @@ export function HowItWorks() {
             <h3>Funds become available</h3>
             <p>
               Stripe may hold funds pending settlement or review. Your account
-              shows standard and instant-eligible balances separately.
+              shows your available and pending balances.
             </p>
           </li>
           <li>
             <h3>Payout requested</h3>
             <p>
-              Instant Payout is selected when your Stripe account and balance
-              are eligible. You can choose a standard bank payout instead, then
-              request it yourself. Canadian Instant Payouts use supported debit
-              cards linked to bank accounts. SaladFinder adds no worker payout
-              fee for either choice.
+              {config?.instantPayoutsEnabled
+                ? "Instant Payout is selected when your Stripe account and balance are eligible. You can choose a standard bank payout instead. Canadian Instant Payouts use supported debit cards linked to bank accounts."
+                : "Request a standard bank payout once your Stripe account and available funds are eligible. Instant Payouts: Coming later; currently disabled."}{" "}
+              You request payouts yourself. SaladFinder adds no worker payout
+              fee.
             </p>
           </li>
           <li>
             <h3>Money arrives</h3>
             <p>
-              Stripe describes eligible instant payouts as typically arriving
-              within 30 minutes. Delays, limits, and eligibility checks still
-              apply. Standard bank payouts take longer; initial payouts can take
-              longer again.
+              {config?.instantPayoutsEnabled &&
+                "Stripe describes eligible instant payouts as typically arriving within 30 minutes. Delays, limits, and eligibility checks still apply. "}
+              Standard bank payouts follow Stripe’s processing and your bank’s
+              timing. Initial payouts can take longer. No particular arrival day
+              is guaranteed.
             </p>
           </li>
         </ol>

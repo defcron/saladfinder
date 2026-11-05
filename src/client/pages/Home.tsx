@@ -250,8 +250,9 @@ export function Home() {
             </div>
           )}
           <p className="payout-note">
-            Same-day payouts depend on Stripe eligibility. Standard bank payouts
-            take longer.{" "}
+            {config?.instantPayoutsEnabled
+              ? "Instant payouts depend on Stripe eligibility. Standard bank payouts follow settlement and banking timelines."
+              : "Instant Payouts: Coming later. Standard bank payouts follow settlement and banking timelines."}{" "}
             <Link to="/how-it-works#payments">How payments work</Link>
           </p>
         </section>

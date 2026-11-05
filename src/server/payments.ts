@@ -378,6 +378,7 @@ export function createPaymentsRouter(
     const base = {
       configured,
       testMode,
+      instantPayoutsEnabled: c.env.INSTANT_PAYOUTS_ENABLED === "true",
       accountReady: false,
       onboardingComplete: false,
       chargesEnabled: false,
@@ -480,7 +481,7 @@ export function createPaymentsRouter(
         : testMode
           ? "Stripe test mode: no real money moves and no bank payout occurs."
           : c.env.INSTANT_PAYOUTS_ENABLED !== "true"
-            ? "Instant payouts are unavailable on this platform. Standard payouts to an eligible bank account remain available; settlement and bank processing times apply."
+            ? "Instant Payouts are coming later and currently disabled. Standard payouts to an eligible bank account remain available; settlement and bank processing times apply."
             : "Request an instant payout to an eligible debit card or a standard payout to a linked bank account. Instant arrival is usually within 30 minutes, but delays can occur. Standard payouts take longer; settlement and bank processing still apply.",
     });
   });
@@ -799,7 +800,7 @@ export function createPaymentsRouter(
       )
         throw new HTTPException(409, {
           message:
-            "Instant payouts are unavailable on this platform. Choose a standard bank payout.",
+            "Instant Payouts are coming later and currently disabled. Choose a standard bank payout.",
         });
       if (await frozen(c.env.DB, user.id))
         throw new HTTPException(409, {
