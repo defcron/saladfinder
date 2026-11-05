@@ -35,7 +35,7 @@
     "APP_ENV": "production",
     "STRIPE_MODE": "live",
     "PRICING_ENABLED": "true",
-    "SUBSCRIPTIONS_ENABLED": "false",
+    "SUBSCRIPTIONS_ENABLED": "true",
     "STRIPE_ECONOMY_PRICE": "price_1UYVcfAUuoHexO68guUHb0Hv",
     "STRIPE_PREMIUM_PRICE": "price_1UYVdOAUuoHexO68kKxNSQhq",
     "FRONTEND_ORIGIN": "https://saladfinder.defcron.chatgpt.site",
@@ -94,7 +94,7 @@
       "vars": {
         "APP_ENV": "staging",
         "PRICING_ENABLED": "true",
-        "SUBSCRIPTIONS_ENABLED": "false",
+        "SUBSCRIPTIONS_ENABLED": "true",
         "STRIPE_ECONOMY_PRICE": "price_1UYVhkAJiXWJHbyYjFY4Wc5W",
         "STRIPE_PREMIUM_PRICE": "price_1UYVidAJiXWJHbyYpJk5tOpJ",
         "STRIPE_MODE": "test",

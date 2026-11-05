@@ -1,6 +1,6 @@
 # Worker fees and subscriptions
 
-Status (2026-11-05): implemented and deployed to production and staging. New Standard transaction fees are enabled. Economy/Premium purchasing is disabled pending approval of the restricted-key Billing permissions and actual sandbox subscription acceptance. This document is MIT licensed with the rest of the repository.
+Status (2026-11-05): implemented and deployed to production and staging. Standard fees and Economy/Premium subscription purchasing are enabled. The operator approved the limited restricted-key Billing permissions; both live and staging keys were saved after Stripe verification. This document is MIT licensed with the rest of the repository.
 
 ## Requested behaviour
 
@@ -83,13 +83,15 @@ Instant payouts remain disabled in production. Subscription purchase does not un
 
 ## Release verification — 2026-11-05
 
-- `npm run check`: 226 tests, TypeScript and production build passed.
-- `npm run coverage`: passed configured thresholds; lines 94.13%, branches 88.56%.
+- `npm run check`: 227 tests, TypeScript and production build passed.
+- `npm run coverage`: passed configured thresholds; lines 94.14%, branches 88.61%.
 - `npm run test:e2e`: all 24 desktop/mobile browser tests passed.
 - Production/staging executable parity check passed; only environment bindings/configuration differ.
 - Actual managed-sandbox Standard milestone paid through hosted Checkout: gross CA$25, poster fee CA$4.73, worker fee CA$2.98, client charge CA$29.73 and worker net CA$22.02. Signed webhook reconciliation marked it paid and retained those amounts. Stripe displayed the combined CA$7.71 application fee. A subsequent full sandbox Dashboard refund, including transfer reversal and application-fee refund, reconciled the application milestone to `refunded`. This verified provider/webhook refund handling; the app's admin refund request path is covered by automated integration tests.
-- Local integration tests cover all plan combinations, immutable retries, cross-user denial, failed renewals, cancellation/expiry, risk revocation and reordered events. Actual provider subscription purchase/renewal/cancellation remains pending; it is not implied by the passing mocked integration tests.
+- Local integration tests cover all plan combinations, immutable retries, cross-user denial, failed renewals, cancellation/expiry, risk revocation and reordered events. Actual managed-sandbox purchases activated Economy (CA$10/month) and Premium (CA$25/month) through signed events. Customer Portal opening, scheduled cancellation, reactivation and repeat cancellation passed. A scheduled `cancel_at` timestamp is supported even when Stripe sets `cancel_at_period_end=false`. Future-cycle renewal and failed-renewal outcomes remain automated integration-test coverage rather than a claim of elapsed-month provider testing.
 - Both live/test Products and monthly CAD Prices exist. Both platform webhook destinations subscribe to 19 events; Customer Portals permit invoice history, payment-method updates and period-end cancellation. Plan switching and quantity changes are disabled.
 - Production instant payouts remain disabled. No real-money acceptance transaction was performed for this release.
 
-Frontend published as Sites version 6. Production Worker version `565090fb-90b6-44d3-a1c1-3ef589e6da46`; staging Worker version `c532fc19-899b-4eb4-a7fc-a2e6815b110d`. Subscription purchase activation requires completing the outstanding provider checks and then changing `SUBSCRIPTIONS_ENABLED` in the respective environment; never treat a pre-created Price as evidence of purchase readiness.
+Frontend published as Sites version 6. Production Worker version `8bd81035-bbd6-4c92-922b-6d5c3d5cb607`; staging Worker version `0255fbe0-cf61-4a76-a63e-57bf60db7783`. `SUBSCRIPTIONS_ENABLED=true` in both environments. The executable parity SHA-256 is `5cf2f3904db61d60490ed51f2a530e95782731904b73f7b1a928521858ac240c`.
+
+Sandbox fee acceptance also verified a CA$25 Economy posting fee of CA$2.73, a Premium posting fee of CA$2.28, and an Economy application worker fee of CA$1.85. The prior Standard worker fee remained CA$2.98. Unused synthetic test listings were canceled. No real money was charged for these subscription acceptance checks.

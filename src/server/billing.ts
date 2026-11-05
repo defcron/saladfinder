@@ -99,7 +99,16 @@ export async function syncSubscription(
       invoice?.status === "paid" &&
       sub.items.data.length === 1 &&
       plan !== "standard";
-    const until = paid ? item.current_period_end : 0;
+    // Customer Portal can schedule cancellation with cancel_at while leaving
+    // cancel_at_period_end false. Respect both representations and never grant
+    // benefits beyond an explicitly scheduled cancellation.
+    const scheduledCancellation = sub.cancel_at != null;
+    const until = paid
+      ? Math.min(
+          item.current_period_end,
+          sub.cancel_at ?? item.current_period_end,
+        )
+      : 0;
     const saved = await env.DB.prepare(
       "UPDATE billing_accounts SET subscription_id=?,plan=?,paid_until=?,status=?,cancel_at_period_end=?,updated_at=? WHERE user_id=? AND sync_lock=? AND sync_until>?",
     )
@@ -108,7 +117,7 @@ export async function syncSubscription(
         plan,
         until,
         sub.status,
-        sub.cancel_at_period_end ? 1 : 0,
+        sub.cancel_at_period_end || scheduledCancellation ? 1 : 0,
         seconds(),
         account.user_id,
         lock,

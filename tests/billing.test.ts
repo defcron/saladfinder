@@ -366,6 +366,24 @@ describe("subscription ownership, checkout and reconciliation", () => {
     await syncSubscription(env, fake, "sub_one", "cus_one");
     expect(await currentPlan(env.DB, "one")).toBe("standard");
   });
+  it("handles Customer Portal cancel_at timestamps without the period-end flag", async () => {
+    await account();
+    const cancellation = now() + 3600;
+    fake.subscriptions.retrieve.mockResolvedValue(
+      sub({ cancel_at: cancellation, cancel_at_period_end: false }),
+    );
+    await syncSubscription(env, fake, "sub_one", "cus_one");
+    expect(await (await call("/billing/status")).json()).toMatchObject({
+      plan: "economy",
+      paidUntil: cancellation,
+      cancelAtPeriodEnd: true,
+    });
+    fake.subscriptions.retrieve.mockResolvedValue(
+      sub({ cancel_at: now() - 1 }),
+    );
+    await syncSubscription(env, fake, "sub_one", "cus_one");
+    expect(await currentPlan(env.DB, "one")).toBe("standard");
+  });
   it("rejects missing customers, wrong ownership, mode and overlapping synchronization", async () => {
     await expect(
       syncSubscription(env, fake, "sub_one", "missing"),
