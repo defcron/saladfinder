@@ -321,8 +321,7 @@ export function Pricing() {
           </ul>
           <p className="small-text">
             Workers remain responsible for their own taxes and business
-            expenses. Applicable tax treatment must be established before the
-            paid marketplace launches.
+            expenses.
           </p>
         </section>
         <aside className="calculator">

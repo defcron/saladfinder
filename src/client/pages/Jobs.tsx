@@ -402,10 +402,7 @@ export function PostJob() {
             12% + $1 per paid milestone, with a $3 minimum fee. Workers receive
             the listed amount before their own taxes.
           </p>
-          <p>
-            Tax treatment must be confirmed before paid bookings open. No charge
-            to publish a job.
-          </p>
+          <p>No charge to publish a job.</p>
           <div className="quote-rule">
             <ShieldCheck size={23} />
             <p>
