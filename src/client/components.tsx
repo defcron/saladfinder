@@ -1,3 +1,4 @@
+import { displayLabel } from "./locale";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Link, NavLink, useLocation } from "react-router-dom";
 import {
@@ -10,6 +11,8 @@ import {
   LoaderCircle,
 } from "lucide-react";
 import { useApp } from "./context";
+import { countryName } from "./region";
+import { LanguageSelect } from "./language-select";
 import { post, money, type Job, readable } from "./api";
 
 export function Logo({ small = false }: { small?: boolean }) {
@@ -115,6 +118,7 @@ export function Layout({ children }: { children: ReactNode }) {
         <Link to="/" className="brand-link" aria-label="SaladFinder home">
           <Logo small />
         </Link>
+        <LanguageSelect />
         <nav aria-label="Footer navigation">
           <Link to="/trust">Trust &amp; safety</Link>
           <Link to="/terms">Terms</Link>
@@ -143,7 +147,9 @@ export function Alert({
       role={kind === "error" ? "alert" : "status"}
     >
       <Icon size={20} aria-hidden="true" />
-      <div>{children}</div>
+      <div>
+        {typeof children === "string" ? displayLabel(children) : children}
+      </div>
     </div>
   );
 }
@@ -151,7 +157,7 @@ export function Loading({ label = "Loading…" }: { label?: string }) {
   return (
     <div className="loading" role="status">
       <LoaderCircle size={20} className="spinner" aria-hidden="true" />
-      {label}
+      {displayLabel(label)}
     </div>
   );
 }
@@ -196,7 +202,7 @@ export function PreviewNotice() {
           </>
         ) : (
           <>
-            Launching in Ontario.{" "}
+            Explore local work.{" "}
             <Link to="/early-access">Join early access</Link> while payments are
             being set up.
           </>
@@ -206,7 +212,11 @@ export function PreviewNotice() {
   ) : null;
 }
 export function Status({ value }: { value: string }) {
-  return <span className={`status status-${value}`}>{readable(value)}</span>;
+  return (
+    <span className={`status status-${value}`}>
+      {displayLabel(readable(value))}
+    </span>
+  );
 }
 export function JobRow({ job }: { job: Job }) {
   return (
@@ -214,9 +224,9 @@ export function JobRow({ job }: { job: Job }) {
       <div className="job-row-main">
         <h3>{job.title}</h3>
         <p>
-          {job.city}
+          {[job.city, countryName(job.country)].filter(Boolean).join(", ")}
           <span aria-hidden="true"> · </span>
-          {job.category}
+          {displayLabel(job.category)}
         </p>
       </div>
       <div className="job-row-price">

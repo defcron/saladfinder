@@ -1,3 +1,5 @@
+import { countryName } from "../region";
+import { displayLabel } from "../locale";
 import { PlanComparison } from "../billing";
 import { transactionFee, PLANS, type Plan } from "../../shared/pricing";
 import { useState, type FormEvent } from "react";
@@ -103,7 +105,7 @@ export function Waitlist() {
             ? "Your early-access signup."
             : joined
               ? "You’re on the list."
-              : "Let’s get Ontario working."
+              : "Find work in your community."
         }
       >
         <p>
@@ -207,10 +209,10 @@ export function Waitlist() {
             />
           </label>
           <label>
-            Ontario city
+            City or locality
             <input
               required
-              minLength={2}
+              minLength={1}
               maxLength={80}
               value={city}
               onChange={(e) => setCity(e.target.value)}
@@ -235,7 +237,7 @@ export function Waitlist() {
                     checked={role === value}
                     onChange={() => setRole(value)}
                   />
-                  {label}
+                  {displayLabel(label)}
                 </label>
               ))}
             </div>
@@ -244,7 +246,7 @@ export function Waitlist() {
             <input type="checkbox" required />
             <span>
               I’m 18 or older and agree to be contacted about SaladFinder’s
-              Ontario launch. I’ve read the{" "}
+              marketplace launch. I’ve read the{" "}
               <Link to="/privacy">Privacy notice</Link> and can withdraw using
               my private removal link.
             </span>
@@ -289,8 +291,8 @@ export function Pricing() {
   const [count, setCount] = useState("1");
   const dollars = Number(pay);
   const cents = Math.round(dollars * 100);
-  const validPay = dollars >= 25 && dollars <= 5000 &&
-    Math.abs(dollars * 100 - cents) < 1e-8;
+  const validPay =
+    dollars >= 25 && dollars <= 5000 && Math.abs(dollars * 100 - cents) < 1e-8;
   const amount = validPay ? cents : 0;
   const milestones = Math.max(1, Math.min(5, Number(count) || 1));
   const fee =
@@ -315,6 +317,21 @@ export function Pricing() {
             : "Workers keep the listed pay. Clients cover a straightforward service fee when they pay a milestone."}
         </p>
       </PageHeading>
+      <section className="content-section" id="payout-regions">
+        <h2>Where workers can get paid</h2>
+        <p>
+          Post jobs and apply worldwide. Paid hiring depends on the worker’s
+          payout country and Stripe eligibility. All agreements and
+          subscriptions use Canadian dollars.
+        </p>
+        <p>
+          <strong>Available payout countries</strong>
+          {" · "}
+          {(config?.workerPayoutCountries || ["CA"])
+            .map(countryName)
+            .join(", ")}
+        </p>
+      </section>
       {config?.pricingEnabled && <PlanComparison />}
       <div className="pricing-layout">
         <section className="pricing-story">
@@ -406,26 +423,33 @@ export function Pricing() {
               </label>
             </div>
           )}
-          {validPay ? <dl className="price-breakdown">
-            <div>
-              <dt>Worker receives</dt>
-              <dd>{money(worker - workerFees)}</dd>
-            </div>
-            <div>
-              <dt>Poster service fee</dt>
-              <dd>{money(fee)}</dd>
-            </div>
-            {config?.pricingEnabled && (
+          {validPay ? (
+            <dl className="price-breakdown">
               <div>
-                <dt>Worker service fee (deducted)</dt>
-                <dd>{money(workerFees)}</dd>
+                <dt>Worker receives</dt>
+                <dd>{money(worker - workerFees)}</dd>
               </div>
-            )}
-            <div className="total">
-              <dt>Client total</dt>
-              <dd>{money(worker + fee)} CAD</dd>
-            </div>
-          </dl> : <p role="status">Enter a milestone amount from $25 to $5,000 CAD with up to two decimal places to see the estimate.</p>}
+              <div>
+                <dt>Poster service fee</dt>
+                <dd>{money(fee)}</dd>
+              </div>
+              {config?.pricingEnabled && (
+                <div>
+                  <dt>Worker service fee (deducted)</dt>
+                  <dd>{money(workerFees)}</dd>
+                </div>
+              )}
+              <div className="total">
+                <dt>Client total</dt>
+                <dd>{money(worker + fee)} CAD</dd>
+              </div>
+            </dl>
+          ) : (
+            <p role="status">
+              Enter a milestone amount from $25 to $5,000 CAD with up to two
+              decimal places to see the estimate.
+            </p>
+          )}
           <p className="small-text">
             Excludes monthly subscriptions and any applicable taxes. Job
             maximum: $5,000 CAD in gross worker pay. Final amounts are
@@ -461,8 +485,8 @@ export function HowItWorks() {
     <section className="page-wrap">
       <PageHeading title="Good work, agreed from the start.">
         <p>
-          A practical way for Ontario neighbours to find help and for workers to
-          find their next job.
+          A practical way for neighbours to find help and for workers to find
+          their next job.
         </p>
       </PageHeading>
       <PreviewNotice />
@@ -486,8 +510,8 @@ export function HowItWorks() {
         ].map(({ Icon, title, body }) => (
           <section key={title}>
             <Icon size={30} strokeWidth={1.4} />
-            <h2>{title}</h2>
-            <p>{body}</p>
+            <h2>{displayLabel(title)}</h2>
+            <p>{displayLabel(body)}</p>
           </section>
         ))}
       </div>
@@ -519,8 +543,9 @@ export function HowItWorks() {
               {config?.instantPayoutsEnabled
                 ? "Instant Payout is selected when your Stripe account and balance are eligible. You can choose a standard bank payout instead. Canadian Instant Payouts use supported debit cards linked to bank accounts."
                 : "Request a standard bank payout once your Stripe account and available funds are eligible. Instant Payouts: Coming later; currently disabled."}{" "}
-              You request payouts yourself. SaladFinder adds no worker payout
-              fee.
+              Canadian workers request their payouts here. Where cross-border
+              payouts are available, Stripe handles local bank settlement and
+              the payout schedule. SaladFinder adds no worker payout fee.
             </p>
           </li>
           <li>
@@ -660,12 +685,13 @@ export function InfoPage({ kind }: { kind: "trust" | "terms" | "privacy" }) {
           <h2>Who the service is for</h2>
           <p>
             SaladFinder is operated by Jeremy Carter as a sole proprietor in
-            Ontario, Canada. You must be at least 18. These terms cover
-            accounts, profiles, listings, applications and enabled work and
-            payment features. An application expresses interest; it does not
-            hire a worker or authorize work to start. The poster must hire the
-            worker through the job page before the worker starts the agreed
-            work.
+            Ontario, Canada. You must be at least 18. Workers and posters must
+            be locally permitted to offer, perform or hire for the work they
+            agree to. These terms cover accounts, profiles, listings,
+            applications and enabled work and payment features. An application
+            expresses interest; it does not hire a worker or authorize work to
+            start. The poster must hire the worker through the job page before
+            the worker starts the agreed work.
           </p>
           <h2>Early access</h2>
           <p>
@@ -743,11 +769,11 @@ export function InfoPage({ kind }: { kind: "trust" | "terms" | "privacy" }) {
         <>
           <h2>Information we collect</h2>
           <p>
-            If you join early access, we store your email address, Ontario city,
-            whether you want to find work or hire help, your consent timestamp,
-            and the signup time. We also store a cryptographic hash of a private
-            removal token. The private token is shown to you and saved in your
-            browser so you can remove the signup later.
+            If you join early access, we store your email address, city or
+            locality, whether you want to find work or hire help, your consent
+            timestamp, and the signup time. We also store a cryptographic hash
+            of a private removal token. The private token is shown to you and
+            saved in your browser so you can remove the signup later.
           </p>
           <p>
             Cloudflare’s security systems process technical information, such as
@@ -758,26 +784,29 @@ export function InfoPage({ kind }: { kind: "trust" | "terms" | "privacy" }) {
           </p>
           <h2>Why we use it</h2>
           <p>
-            We use early-access signup information to plan the Ontario launch,
-            understand demand by city, and provide launch communications when
-            that system is available. Early-access signup does not send a
+            We use early-access signup information to plan the marketplace
+            launch, understand demand by city, and provide launch communications
+            when that system is available. Early-access signup does not send a
             confirmation email. Account sign-in is separate and sends the
             requested sign-in link through the configured email provider. We do
             not sell your signup information.
           </p>
           <h2>Providers and storage</h2>
           <p>
-            The app and database use Cloudflare. Data may be processed outside
-            Canada under the provider’s infrastructure and terms. Cloudflare
-            Turnstile helps protect forms against abuse. Stripe collects payment
-            and payout-account information on its own hosted pages. We store
-            Stripe account and transaction references, amounts, payment and
-            payout statuses, and reconciliation records to operate payments,
-            handle refunds and investigate disputes. The public frontend is
-            hosted by OpenAI Sites through our Cloudflare gateway. The
-            configured transactional email provider handles sign-in links and
-            essential account messages. Business-mail forwarding routes support
-            requests to the operator’s inbox.
+            The app, database and automatic interface translations use
+            Cloudflare. Your language preference is saved in your browser. Job
+            descriptions, private messages and sign-in links are excluded from
+            translation requests. Data may be processed outside Canada under the
+            provider’s infrastructure and terms. Cloudflare Turnstile helps
+            protect forms against abuse. Stripe collects payment and
+            payout-account information on its own hosted pages. We store Stripe
+            account and transaction references, amounts, payment and payout
+            statuses, and reconciliation records to operate payments, handle
+            refunds and investigate disputes. The public frontend is hosted by
+            OpenAI Sites through our Cloudflare gateway. The configured
+            transactional email provider handles sign-in links and essential
+            account messages. Business-mail forwarding routes support requests
+            to the operator’s inbox.
           </p>
           <h2>Your choices</h2>
           <p>
@@ -793,8 +822,8 @@ export function InfoPage({ kind }: { kind: "trust" | "terms" | "privacy" }) {
             If you submit an email already on the list, we do not disclose its
             information or replace its removal token. Use the original removal
             link. Signup information is retained until removal or until the
-            early-access list is no longer needed. Operational and
-            backup copies may persist for their normal retention period.
+            early-access list is no longer needed. Operational and backup copies
+            may persist for their normal retention period.
           </p>
           <h2>Accounts, listings and applications</h2>
           <p>

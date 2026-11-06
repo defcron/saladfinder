@@ -33,6 +33,7 @@
   },
   "vars": {
     "APP_ENV": "production",
+    "CROSS_BORDER_PAYOUTS_ENABLED": "false",
     "STRIPE_MODE": "live",
     "PRICING_ENABLED": "true",
     "SUBSCRIPTIONS_ENABLED": "true",
@@ -54,6 +55,7 @@
       "allowed_sender_addresses": ["login@saladfinder.com"],
     },
   ],
+  "ai": { "binding": "AI" },
   "d1_databases": [
     {
       "binding": "DB",
@@ -68,6 +70,7 @@
       "routes": [],
       "vars": {
         "APP_ENV": "local",
+        "CROSS_BORDER_PAYOUTS_ENABLED": "false",
         "STRIPE_MODE": "test",
         "APP_URL": "http://127.0.0.1:8787",
         "LAUNCH_MODE": "live",
@@ -93,6 +96,7 @@
       "routes": [],
       "vars": {
         "APP_ENV": "staging",
+        "CROSS_BORDER_PAYOUTS_ENABLED": "true",
         "PRICING_ENABLED": "true",
         "SUBSCRIPTIONS_ENABLED": "true",
         "STRIPE_ECONOMY_PRICE": "price_1UYVhkAJiXWJHbyYjFY4Wc5W",
@@ -113,6 +117,7 @@
           "allowed_sender_addresses": ["login@saladfinder.com"],
         },
       ],
+      "ai": { "binding": "AI" },
       "d1_databases": [
         {
           "binding": "DB",

@@ -102,7 +102,7 @@ p:last-child {
 }
 ul,
 ol {
-  padding-left: 24px;
+  padding-inline-start: 24px;
 }
 li {
   line-height: 1.7;
@@ -1180,7 +1180,7 @@ select:disabled {
   background: #e7eadf;
   padding: 3px 6px;
   border-radius: 5px;
-  margin-left: 9px;
+  margin-inline-start: 9px;
 }
 .dashboard-job {
   padding-top: 16px;
@@ -1317,7 +1317,7 @@ select:disabled {
 table {
   border-collapse: collapse;
   width: 100%;
-  text-align: left;
+  text-align: start;
   font-size: 15px;
 }
 th,
@@ -1856,7 +1856,7 @@ th {
   }
   .filter-rail .text-button {
     grid-column: 1/-1;
-    text-align: left;
+    text-align: start;
     margin-bottom: 16px;
   }
   .list-heading h2 {
@@ -1927,7 +1927,7 @@ th {
   .job-total {
     padding: 0;
     align-items: flex-start;
-    text-align: left;
+    text-align: start;
     display: grid;
     grid-template-columns: auto auto;
     gap: 8px 20px;
@@ -2272,7 +2272,7 @@ th {
     font-size: 14px;
   }
   .tabs button > span {
-    margin-left: 5px;
+    margin-inline-start: 5px;
   }
   .heading-with-action {
     display: block;
@@ -2318,7 +2318,7 @@ th {
     font-size: 16px;
   }
   .journey-list li {
-    padding-left: 44px;
+    padding-inline-start: 44px;
   }
   .journey-list h3 {
     font-size: 23px;
@@ -2482,3 +2482,7 @@ code {
   font-size: 0.9rem;
   line-height: 1.5;
 }
+
+.site-footer select { max-width: 14rem; }
+.site-footer small { display: block; max-width: 18rem; }
+[dir="rtl"] input[type="email"], [dir="rtl"] input[type="url"] { direction: ltr; }

@@ -251,7 +251,8 @@ test("job draft and requested destination survive email sign-in", async ({
     .fill(
       "Assemble one flat-pack writing table using the instructions and hand tools supplied. No electrical work or heavy lifting is needed.",
     );
-  await page.getByLabel("Ontario city", { exact: true }).fill("Ottawa");
+  await page.getByLabel("Country or territory").selectOption("CA");
+  await page.getByLabel("City or locality", { exact: true }).fill("Ottawa");
   await page.getByRole("link", { name: "Sign in to publish" }).click();
   await page
     .getByLabel("Email address", { exact: true })
@@ -264,7 +265,7 @@ test("job draft and requested destination survive email sign-in", async ({
   await expect(page.getByLabel("Give your job a clear title")).toHaveValue(
     "Help assemble a writing table",
   );
-  await expect(page.getByLabel("Ontario city", { exact: true })).toHaveValue(
+  await expect(page.getByLabel("City or locality", { exact: true })).toHaveValue(
     "Ottawa",
   );
   await page

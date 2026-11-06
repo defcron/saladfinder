@@ -3,6 +3,8 @@ import { bodyLimit } from "hono/body-limit";
 import { secureHeaders } from "hono/secure-headers";
 import { HTTPException } from "hono/http-exception";
 import { ZodError } from "zod";
+import { payoutCountries } from "../shared/regions";
+import { translations } from "./translations";
 import { auth, loadUser } from "./auth";
 import { marketplace } from "./marketplace";
 import { listingsEnabled, originGuard } from "./middleware";
@@ -40,6 +42,7 @@ app.use(
 );
 app.use("/api/*", originGuard);
 app.use("/api/*", loadUser);
+app.route("/api", translations);
 app.get("/api/health", async (c) => {
   await c.env.DB.prepare("SELECT 1").first();
   return c.json({
@@ -54,7 +57,9 @@ app.get("/api/config", async (c) =>
     listingsReady:
       listingsEnabled(c.env, c.req.url) && isSignInReady(c.env, c.req.url),
     currency: "CAD",
-    region: "Ontario",
+    region: "Global",
+    workerPayoutCountries:
+      c.env.CROSS_BORDER_PAYOUTS_ENABLED === "true" ? payoutCountries : ["CA"],
     authReady: isSignInReady(c.env, c.req.url),
     paymentMode: stripeMode(c.env),
     instantPayoutsEnabled: c.env.INSTANT_PAYOUTS_ENABLED === "true",

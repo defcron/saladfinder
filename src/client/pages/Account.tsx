@@ -1,3 +1,4 @@
+import { displayLabel } from "../locale";
 import { BillingPanel } from "../billing";
 import { useEffect, useState, type FormEvent } from "react";
 import { Link, useSearchParams } from "react-router-dom";
@@ -107,7 +108,7 @@ export function Dashboard() {
               document.getElementById(`tab-${tabs[next]}`)?.focus();
             }}
           >
-            {label}
+            {displayLabel(label)}
             {data && <span>{data[key].length}</span>}
           </button>
         ))}
@@ -181,11 +182,13 @@ export function Dashboard() {
   );
 }
 
+import { CountrySelect } from "../region";
 export function Account() {
   const { user, config, refreshUser } = useApp();
   const [params] = useSearchParams();
   const [name, setName] = useState(user?.name || "");
   const [bio, setBio] = useState(user?.bio || "");
+  const [country, setCountry] = useState(user?.country || "");
   const [city, setCity] = useState(user?.city || "");
   const [skills, setSkills] = useState(
     Array.isArray(user?.skills) ? user.skills.join(", ") : user?.skills || "",
@@ -236,6 +239,7 @@ export function Account() {
           name,
           bio,
           city,
+          country: country || undefined,
           skills: selectedSkills,
         }),
       });
@@ -273,8 +277,13 @@ export function Account() {
               <input value={user?.email || ""} disabled type="email" />
               <span className="field-hint">Your verified account address.</span>
             </label>
+            <CountrySelect
+              value={country}
+              onChange={setCountry}
+              disabled={!!user?.stripe_account_id}
+            />
             <label>
-              Ontario city
+              City or locality
               <input
                 maxLength={80}
                 value={city}
@@ -354,7 +363,7 @@ export function Account() {
                 : "You’re back from Stripe. We’re checking your setup; Stripe may still need more information. Returning here does not itself confirm verification."}
             </Alert>
           )}
-          {!config?.instantPayoutsEnabled && (
+          {!config?.instantPayoutsEnabled && user?.country === "CA" && (
             <Alert kind="info">
               Instant Payouts: Coming later. Standard bank payouts are available
               after Stripe setup and funds become eligible.
@@ -374,6 +383,16 @@ export function Account() {
                 </Alert>
               ) : (
                 <>
+                  {!(config?.workerPayoutCountries || ["CA"]).includes(
+                    user?.country || "",
+                  ) &&
+                    !user?.stripe_account_id && (
+                      <Alert kind="info">
+                        Worldwide listings and applications are open. See the
+                        available payout countries on the pricing page. Save
+                        your country in your profile before payment setup.
+                      </Alert>
+                    )}
                   <div className="payment-setup">
                     <ShieldCheck size={28} strokeWidth={1.5} />
                     <div>
@@ -383,7 +402,7 @@ export function Account() {
                           : "Set up secure payments."}
                       </h3>
                       <p>
-                        {status.message ||
+                        {displayLabel(status.message) ||
                           "Stripe collects and verifies your payment details. SaladFinder never stores your bank or card credentials."}
                       </p>
                     </div>
@@ -421,7 +440,14 @@ export function Account() {
                   <div className="action-row">
                     <button
                       className="button"
-                      disabled={paymentsAction.busy || !config?.paymentsReady}
+                      disabled={
+                        paymentsAction.busy ||
+                        !config?.paymentsReady ||
+                        (!user?.stripe_account_id &&
+                          !(config?.workerPayoutCountries || ["CA"]).includes(
+                            user?.country || "",
+                          ))
+                      }
                       onClick={() => external("/payments/onboard")}
                     >
                       {status.payoutSetupRequired

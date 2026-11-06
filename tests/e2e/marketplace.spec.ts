@@ -9,7 +9,7 @@ async function signInByApi(
 ) {
   const issued = await context.request.post(`${origin}/api/auth/request`, {
     headers: { Origin: origin },
-    data: { email, name, role: "both", consent: true },
+    data: { email, name, role: "both", country:"CA", consent: true },
   });
   expect(issued.ok()).toBeTruthy();
   const { devToken } = await issued.json();
@@ -64,7 +64,7 @@ test("early access stores consent and private removal link deletes the signup", 
   await page
     .getByLabel("Your email")
     .fill(`waitlist-${crypto.randomUUID()}@example.test`);
-  await page.getByLabel("Ontario city", { exact: true }).fill("Toronto");
+  await page.getByLabel("City or locality", { exact: true }).fill("Toronto");
   await page.getByRole("checkbox").check();
   await page
     .getByRole("button", { name: "Join early access", exact: true })
@@ -113,7 +113,8 @@ test("two users complete posting, application, hire, private messages and milest
   await page
     .getByRole("combobox", { name: /^Category/ })
     .selectOption("Assembly");
-  await page.getByLabel("Ontario city", { exact: true }).fill("Ottawa");
+  await page.getByLabel("Country or territory").selectOption("CA");
+  await page.getByLabel("City or locality", { exact: true }).fill("Ottawa");
   await page.getByLabel("Neighbourhood", { exact: false }).fill("Centretown");
   await page
     .getByLabel("Preferred date")

@@ -31,6 +31,7 @@ const worker: User = {
   skills: [],
   created_at: "",
   stripe_account_id: "acct_worker",
+  country: "CA",
   suspended_at: null,
 };
 const poster: User = {
@@ -301,7 +302,7 @@ describe("payment ownership, ledger and Stripe event reconciliation", () => {
     await env.DB.batch(
       Object.values(people).map((u) =>
         env.DB.prepare(
-          "INSERT INTO users (id,email,name,role,stripe_account_id,consent_at) VALUES (?,?,?,?,?,?)",
+          "INSERT INTO users (id,email,name,role,stripe_account_id,consent_at,country) VALUES (?,?,?,?,?,?,'CA')",
         ).bind(
           u.id,
           u.email,
@@ -1155,6 +1156,28 @@ describe("payment ownership, ledger and Stripe event reconciliation", () => {
     expect((await row("SELECT status FROM milestones"))!.status).toBe(
       "refunded",
     );
+  });
+
+  it("gates foreign onboarding and keeps international settlement outside the CAD payout form", async () => {
+    const original = worker.stripe_account_id;
+    const flag = env.CROSS_BORDER_PAYOUTS_ENABLED;
+    try {
+      worker.country = "FR";
+      worker.stripe_account_id = null;
+      await env.DB.prepare("UPDATE users SET stripe_account_id=NULL,country='FR' WHERE id='worker'").run();
+      env.CROSS_BORDER_PAYOUTS_ENABLED = "false";
+      expect((await request("/payments/onboard","worker")).status).toBe(409);
+      expect(fixture.stripe.v2.core.accounts.create).not.toHaveBeenCalled();
+      env.CROSS_BORDER_PAYOUTS_ENABLED = "true";
+      expect((await request("/payments/onboard","worker")).status).toBe(200);
+      expect(fixture.stripe.v2.core.accounts.create.mock.calls[0]![0]).toMatchObject({
+        identity:{country:"fr"},configuration:{merchant:{capabilities:{card_payments:{requested:true}}},recipient:{capabilities:{stripe_balance:{stripe_transfers:{requested:true}}}}}
+      });
+      expect(fixture.stripe.balanceSettings.update).not.toHaveBeenCalled();
+      worker.stripe_account_id=original;
+      expect((await request("/payments/payout","worker",{method:"standard",amount_cents:2500,requestId:crypto.randomUUID()})).status).toBe(409);
+      expect(fixture.stripe.payouts.create).not.toHaveBeenCalled();
+    }finally{worker.country="CA";worker.stripe_account_id=original;env.CROSS_BORDER_PAYOUTS_ENABLED=flag;}
   });
 
   it("onboards through Accounts v2 and never collects bank data in the application", async () => {

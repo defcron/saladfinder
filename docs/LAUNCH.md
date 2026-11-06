@@ -1,6 +1,6 @@
 # Operator launch runbook
 
-SaladFinder is an Ontario/CAD local-services marketplace. Paid pilot configuration is `LISTINGS_ENABLED=true`, `LAUNCH_MODE=live`, and `STRIPE_MODE=live`. Hiring, work messages, milestones, Checkout and standard bank payout requests are enabled. Stripe capability, balance, ownership, dispute and idempotency checks remain enforced for each operation.
+SaladFinder supports worldwide listings and applications with CAD pricing. The original paid pilot covers Canadian worker accounts. See [regional availability](INTERNATIONAL.md) before enabling additional payout countries. Paid pilot configuration is `LISTINGS_ENABLED=true`, `LAUNCH_MODE=live`, and `STRIPE_MODE=live`. Hiring, work messages, milestones, Checkout and standard bank payout requests are enabled. Stripe capability, balance, ownership, dispute and idempotency checks remain enforced for each operation.
 
 On 2026-11-05 the operator confirmed completion of business registration/name clearance, reviewed terms/privacy and worker/tax/insurance obligations, and support/balance monitoring. This is operator attestation, not an independent legal audit. Stripe verification, activation and bank settings were also reported complete. The deployed production connection check passes; the restricted live key now has the limited connected-account permissions needed for onboarding and payouts. Both live snapshot webhook destinations are configured.
 

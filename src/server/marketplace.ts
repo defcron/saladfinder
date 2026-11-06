@@ -1,3 +1,4 @@
+import { isCountry, calendarDate } from "../shared/regions";
 import { currentPlan } from "./billing";
 import {
   transactionFee,
@@ -15,7 +16,7 @@ import {
   type Application,
 } from "../shared/types";
 import type { AppEnv } from "./types";
-import { suspendJobPayments } from "./payments";
+import { requireRegionalHire, suspendJobPayments } from "./payments";
 import {
   audit,
   digest,
@@ -54,6 +55,7 @@ const milestonePublic =
 marketplace.get("/jobs", async (c) => {
   const query = z
     .object({
+      country: z.string().refine(isCountry).optional(),
       q: z.string().max(100).default(""),
       city: z.string().max(80).default(""),
       category: z.enum(CATEGORIES).optional(),
@@ -75,6 +77,10 @@ marketplace.get("/jobs", async (c) => {
   if (city) {
     where.push("j.city LIKE ? ESCAPE '\\'");
     values.push(`%${literal(city)}%`);
+  }
+  if (query.data.country) {
+    where.push("j.country=?");
+    values.push(query.data.country);
   }
   if (category) {
     where.push("j.category=?");
@@ -128,7 +134,7 @@ marketplace.get("/jobs/:id", async (c) => {
   if (user?.id === job.poster_id || admin) {
     applications = (
       await c.env.DB.prepare(
-        "SELECT a.*,u.name AS worker_name,u.bio AS worker_bio,u.city AS worker_city,u.skills AS worker_skills FROM applications a JOIN users u ON u.id=a.worker_id WHERE a.job_id=? ORDER BY a.created_at LIMIT 200",
+        "SELECT a.*,u.name AS worker_name,u.bio AS worker_bio,u.city AS worker_city,u.country AS worker_country,u.skills AS worker_skills FROM applications a JOIN users u ON u.id=a.worker_id WHERE a.job_id=? ORDER BY a.created_at LIMIT 200",
       )
         .bind(job.id)
         .all()
@@ -181,12 +187,25 @@ marketplace.get("/jobs/:id", async (c) => {
   });
 });
 const jobInput = z.object({
+  country: z.string().refine(isCountry).default("CA"),
+  timeZone: z
+    .string()
+    .max(80)
+    .refine((zone) => {
+      try {
+        calendarDate(new Date(), zone);
+        return true;
+      } catch {
+        return false;
+      }
+    })
+    .default("America/Toronto"),
   feePlan: z.enum(["standard", "economy", "premium", "legacy"]).optional(),
   pricingVersion: z.string().optional(),
   title: z.string().trim().min(8).max(120),
   description: z.string().trim().min(40).max(5000),
   category: z.enum(CATEGORIES),
-  city: z.string().trim().min(2).max(80),
+  city: z.string().trim().min(1).max(80),
   area: z.string().trim().max(100).default(""),
   start_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   estimated_hours: z.number().min(0.5).max(80),
@@ -217,17 +236,13 @@ marketplace.post("/jobs", requireUser, requireListings, async (c) => {
       "Pricing changed. Refresh the page and review your fee before posting.",
     );
   const date = new Date(`${body.start_date}T12:00:00Z`);
-  const today = new Intl.DateTimeFormat("en-CA", {
-    timeZone: "America/Toronto",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(new Date());
+  const today = calendarDate(new Date(), body.timeZone);
   if (
     Number.isNaN(date.getTime()) ||
     date.toISOString().slice(0, 10) !== body.start_date ||
     body.start_date < today ||
-    date.getTime() > Date.now() + 366 * 86400000
+    body.start_date >
+      calendarDate(new Date(Date.now() + 365 * 86400000), body.timeZone)
   )
     fail(400, "Choose a valid date from today through the next year.");
   const budget = body.milestones.reduce((sum, m) => sum + m.amount_cents, 0);
@@ -236,7 +251,7 @@ marketplace.post("/jobs", requireUser, requireListings, async (c) => {
   const id = crypto.randomUUID();
   await c.env.DB.batch([
     c.env.DB.prepare(
-      "INSERT INTO jobs (id,poster_id,title,description,category,city,area,start_date,estimated_hours,budget_cents,payment_schedule,fee_plan) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+      "INSERT INTO jobs (id,poster_id,title,description,category,city,country,area,start_date,estimated_hours,budget_cents,payment_schedule,fee_plan) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
     ).bind(
       id,
       user.id,
@@ -244,6 +259,7 @@ marketplace.post("/jobs", requireUser, requireListings, async (c) => {
       body.description,
       body.category,
       body.city,
+      body.country,
       body.area,
       body.start_date,
       body.estimated_hours,
@@ -351,11 +367,18 @@ marketplace.post("/jobs/:id/hire", requireUser, requireLive, async (c) => {
   if (job.poster_id !== user.id)
     fail(403, "Only the job poster can hire a worker.");
   const application = await c.env.DB.prepare(
-    "SELECT a.* FROM applications a JOIN users u ON u.id=a.worker_id WHERE a.id=? AND a.job_id=? AND a.status='pending' AND u.suspended_at IS NULL",
+    "SELECT a.*,u.country AS worker_country,u.stripe_account_id AS account_id FROM applications a JOIN users u ON u.id=a.worker_id WHERE a.id=? AND a.job_id=? AND a.status='pending' AND u.suspended_at IS NULL",
   )
     .bind(applicationId, id)
-    .first<Application>();
+    .first<
+      Application & { worker_country: string | null; account_id: string | null }
+    >();
   if (!application) fail(409, "This application is no longer available.");
+  await requireRegionalHire(
+    c.env,
+    application.worker_country,
+    application.account_id,
+  );
   const frozenWorkerFees = new Map<string, number>(
     (
       JSON.parse(application.worker_fee_snapshot ?? "[]") as {
@@ -373,8 +396,15 @@ marketplace.post("/jobs/:id/hire", requireUser, requireLive, async (c) => {
   ).results;
   const results = await c.env.DB.batch([
     c.env.DB.prepare(
-      "UPDATE jobs SET worker_id=?,status='assigned',updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=? AND poster_id=? AND status='open' AND EXISTS (SELECT 1 FROM applications a JOIN users u ON u.id=a.worker_id WHERE a.id=? AND a.job_id=jobs.id AND a.status='pending' AND u.suspended_at IS NULL)",
-    ).bind(application.worker_id, id, user.id, applicationId),
+      "UPDATE jobs SET worker_id=?,status='assigned',updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=? AND poster_id=? AND status='open' AND EXISTS (SELECT 1 FROM applications a JOIN users u ON u.id=a.worker_id WHERE a.id=? AND a.job_id=jobs.id AND a.status='pending' AND u.country=? AND u.stripe_account_id IS ? AND u.suspended_at IS NULL)",
+    ).bind(
+      application.worker_id,
+      id,
+      user.id,
+      applicationId,
+      application.worker_country,
+      application.account_id,
+    ),
     ...pricedMilestones.map((m) =>
       c.env.DB.prepare(
         "UPDATE milestones SET worker_fee_cents=? WHERE id=? AND EXISTS (SELECT 1 FROM jobs WHERE id=? AND worker_id=? AND status='assigned')",
@@ -598,7 +628,7 @@ marketplace.post("/waitlist", async (c) => {
         .email()
         .max(254)
         .transform((s) => s.toLowerCase()),
-      city: z.string().trim().min(2).max(80),
+      city: z.string().trim().min(1).max(80),
       role: z.enum(["worker", "poster", "both"]),
       consent: z.literal(true),
       turnstileToken: z.string().max(2048).optional(),

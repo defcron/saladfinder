@@ -1,3 +1,4 @@
+import { displayLabel } from "../locale";
 import { transactionFee, PRICING_VERSION } from "../../shared/pricing";
 import { useEffect, useState, type FormEvent } from "react";
 import {
@@ -43,9 +44,12 @@ import {
   useAction,
 } from "../components";
 
+import { CountrySelect, countryName } from "../region";
+import { calendarDate } from "../../shared/regions";
 type DraftMilestone = { key: string; title: string; amount: string };
 const jobDraftKey = "saladfinder-job-draft";
 type JobDraft = {
+  country?: string;
   title: string;
   description: string;
   category: string;
@@ -100,6 +104,8 @@ export function PostJob() {
       ? draft!.category
       : categories[0],
   );
+  const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const [country, setCountry] = useState(draft?.country || user?.country || "");
   const [city, setCity] = useState(draft?.city || "");
   const [area, setArea] = useState(draft?.area || "");
   const [date, setDate] = useState(draft?.date || "");
@@ -117,6 +123,7 @@ export function PostJob() {
           title,
           description,
           category,
+          country,
           city,
           area,
           date,
@@ -128,7 +135,17 @@ export function PostJob() {
     } catch {
       setDraftSaved(false);
     }
-  }, [title, description, category, city, area, date, hours, milestones]);
+  }, [
+    title,
+    description,
+    category,
+    country,
+    city,
+    area,
+    date,
+    hours,
+    milestones,
+  ]);
   const amounts = milestones.map((m) =>
     Math.round(Number(m.amount || 0) * 100),
   );
@@ -165,6 +182,8 @@ export function PostJob() {
         category,
         city,
         area,
+        country,
+        timeZone,
         start_date: date,
         estimated_hours: Number(hours),
         milestones: milestones.map((m, i) => ({
@@ -224,15 +243,18 @@ export function PostJob() {
                   onChange={(e) => setCategory(e.target.value)}
                 >
                   {categories.map((c) => (
-                    <option key={c}>{c}</option>
+                    <option key={c} value={c}>
+                      {displayLabel(c)}
+                    </option>
                   ))}
                 </select>
               </label>
+              <CountrySelect value={country} onChange={setCountry} required />
               <label>
-                Ontario city
+                City or locality
                 <input
                   required
-                  minLength={2}
+                  minLength={1}
                   maxLength={80}
                   value={city}
                   onChange={(e) => setCity(e.target.value)}
@@ -255,12 +277,10 @@ export function PostJob() {
                 <input
                   type="date"
                   required
-                  min={new Date().toLocaleDateString("en-CA", {
-                    timeZone: "America/Toronto",
-                  })}
-                  max={new Date(Date.now() + 365 * 86400000).toLocaleDateString(
-                    "en-CA",
-                    { timeZone: "America/Toronto" },
+                  min={calendarDate(new Date(), timeZone)}
+                  max={calendarDate(
+                    new Date(Date.now() + 365 * 86400000),
+                    timeZone,
                   )}
                   value={date}
                   onChange={(e) => setDate(e.target.value)}
@@ -374,7 +394,7 @@ export function PostJob() {
           {preview ? (
             <div className="notice-with-action">
               <p>
-                You can plan your job here. Publishing opens when the Ontario
+                You can plan your job here. Publishing opens when the
                 marketplace launches.
               </p>
               <Link to="/early-access" className="button">
@@ -560,7 +580,8 @@ export function JobPage() {
       <div className="job-heading">
         <div>
           <div className="job-category">
-            {job.category} · {job.city}
+            {displayLabel(job.category)} ·{" "}
+            {[job.city, countryName(job.country)].filter(Boolean).join(", ")}
           </div>
           <h1>{job.title}</h1>
           <div className="job-meta">
@@ -766,14 +787,34 @@ export function JobPage() {
                         <p className="small-text">Profile: {a.worker_bio}</p>
                       )}
                       {a.worker_city && (
-                        <p className="small-text">Based in {a.worker_city}</p>
+                        <p className="small-text">
+                          Based in{" "}
+                          {[a.worker_city, countryName(a.worker_country)]
+                            .filter(Boolean)
+                            .join(", ")}
+                        </p>
                       )}
+                      {owner &&
+                        !(config?.workerPayoutCountries || ["CA"]).includes(
+                          a.worker_country || "",
+                        ) && (
+                          <p>
+                            Paid hiring is unavailable until this worker has a
+                            supported payout country.
+                          </p>
+                        )}
                       {owner &&
                         job.status === "open" &&
                         a.status === "pending" && (
                           <button
                             className="button"
-                            disabled={action.busy || !workReady}
+                            disabled={
+                              action.busy ||
+                              !workReady ||
+                              !(
+                                config?.workerPayoutCountries || ["CA"]
+                              ).includes(a.worker_country || "")
+                            }
                             onClick={() =>
                               act(
                                 `/jobs/${id}/hire`,
@@ -937,8 +978,11 @@ export function JobPage() {
                     : "Sound like your kind of work?"}
             </h2>
             <p>
-              Agree on the scope and payment stages before starting. Take work
-              only when you have the skills, tools, and time to do it safely.
+              Workers can apply worldwide. Paid hiring requires a supported
+              worker payout country. International workers must finish Stripe
+              verification before hire. Agree on the scope and payment stages
+              before starting. Take work only when you have the skills, tools,
+              and time to do it safely.
             </p>
             {example ? (
               <Link className="button" to="/early-access">

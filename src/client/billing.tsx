@@ -1,3 +1,4 @@
+import { locale } from "./locale";
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, post, money, stripeRedirect } from "./api";
@@ -124,7 +125,7 @@ export function BillingPanel() {
               {status.cancelAtPeriodEnd
                 ? "Cancels"
                 : "Current paid period ends"}{" "}
-              {new Date(status.paidUntil * 1000).toLocaleDateString("en-CA")}.
+              {new Date(status.paidUntil * 1000).toLocaleDateString(locale)}.
               Benefits require successful renewal and apply to new
               postings/applications.
             </p>

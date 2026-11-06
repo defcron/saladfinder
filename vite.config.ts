@@ -1,7 +1,8 @@
 import { defineConfig } from "vite";
+import localize from "./scripts/i18n/plugin.mjs";
 import react from "@vitejs/plugin-react";
 export default defineConfig({
-  plugins: [react()],
+  plugins: [localize(), react()],
   build: { outDir: "dist", sourcemap: false },
   server: {
     host: "127.0.0.1",

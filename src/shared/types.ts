@@ -23,6 +23,7 @@ export interface User {
   name: string;
   role: UserRole;
   bio: string;
+  country?: string | null;
   city: string;
   skills: string[];
   created_at: string;
@@ -38,6 +39,7 @@ export interface Job {
   title: string;
   description: string;
   category: Category;
+  country?: string | null;
   city: string;
   area: string;
   start_date: string;

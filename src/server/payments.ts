@@ -1,3 +1,4 @@
+import { supportsPayouts } from "../shared/regions";
 import Stripe from "stripe";
 import { billingEvent } from "./billing";
 import { Hono } from "hono";
@@ -45,6 +46,7 @@ type Milestone = {
   worker_fee_cents?: number;
   account_id: string | null;
   worker_suspended: string | null;
+  worker_country: string | null;
 };
 type PayoutIntent = {
   request_id: string;
@@ -107,14 +109,45 @@ async function connectedAccount(stripe: Stripe, accountId: string) {
   });
   const capabilities =
     account.configuration?.recipient?.capabilities?.stripe_balance;
-  const canadian =
-    account.identity?.country?.toUpperCase() === "CA" && !account.closed;
+  const country = account.identity?.country?.toUpperCase();
+  const supported = supportsPayouts(country) && !account.closed;
   return {
     account,
     transfersEnabled:
-      canadian && capabilities?.stripe_transfers?.status === "active",
-    payoutsEnabled: canadian && capabilities?.payouts?.status === "active",
+      supported && capabilities?.stripe_transfers?.status === "active",
+    payoutsEnabled: supported && capabilities?.payouts?.status === "active",
   };
+}
+
+export async function requireRegionalHire(
+  env: Env,
+  country: string | null,
+  accountId: string | null,
+) {
+  if (
+    !supportsPayouts(country) ||
+    (country !== "CA" && env.CROSS_BORDER_PAYOUTS_ENABLED !== "true")
+  )
+    throw new HTTPException(409, {
+      message: "This worker’s payout country is unavailable for paid hiring.",
+    });
+  if (country === "CA") return;
+  if (!accountId)
+    throw new HTTPException(409, {
+      message:
+        "The worker must complete international Stripe onboarding before hiring.",
+    });
+  assertPaymentAccess(env);
+  const account = await connectedAccount(defaultStripe(env), accountId);
+  if (
+    account.account.identity?.country?.toUpperCase() !== country ||
+    !account.transfersEnabled ||
+    !account.payoutsEnabled
+  )
+    throw new HTTPException(409, {
+      message:
+        "Stripe must enable transfers and payouts for this worker before hiring.",
+    });
 }
 
 async function externalDestinations(stripe: Stripe, accountId: string) {
@@ -196,7 +229,7 @@ async function frozen(db: D1Database, userId: string) {
 async function milestone(db: D1Database, id: string): Promise<Milestone> {
   const value = await db
     .prepare(
-      "SELECT m.*, j.poster_id, j.worker_id, j.status AS job_status, u.stripe_account_id AS account_id, u.suspended_at AS worker_suspended FROM milestones m JOIN jobs j ON j.id = m.job_id LEFT JOIN users u ON u.id = j.worker_id WHERE m.id = ?",
+      "SELECT m.*, j.poster_id, j.worker_id, j.status AS job_status, u.stripe_account_id AS account_id, u.suspended_at AS worker_suspended,u.country AS worker_country FROM milestones m JOIN jobs j ON j.id = m.job_id LEFT JOIN users u ON u.id = j.worker_id WHERE m.id = ?",
     )
     .bind(id)
     .first<Milestone>();
@@ -420,6 +453,21 @@ export function createPaymentsRouter(
           "Connect Stripe to receive payments. Bank arrival depends on eligibility.",
       });
     const stripe = makeStripe(c.env);
+    if (user.country && user.country !== "CA") {
+      const readiness = await connectedAccount(stripe, user.stripe_account_id);
+      const ready =
+        readiness.account.identity?.country?.toUpperCase() === user.country &&
+        readiness.payoutsEnabled &&
+        readiness.transfersEnabled;
+      return c.json({
+        ...base,
+        accountReady: ready,
+        onboardingComplete: ready,
+        payoutsEnabled: ready,
+        message:
+          "International payouts follow your Stripe payout schedule. View your settlement currency, bank details and expected arrival in Stripe.",
+      });
+    }
     const [readiness, balance, payouts, held, destinations, settings] =
       await Promise.all([
         connectedAccount(stripe, user.stripe_account_id),
@@ -496,21 +544,36 @@ export function createPaymentsRouter(
     const user = c.get("user")!;
     await rateLimit(c, "connect-onboard", user.id, 10, 3600);
     const stripe = makeStripe(c.env);
+    if (
+      !supportsPayouts(user.country) ||
+      (user.country !== "CA" && c.env.CROSS_BORDER_PAYOUTS_ENABLED !== "true")
+    )
+      throw new HTTPException(409, {
+        message:
+          "Select a supported payout country in your profile before connecting Stripe.",
+      });
     let accountId = user.stripe_account_id;
     if (!accountId) {
       const accountRequest: Stripe.V2.Core.AccountCreateParams = {
         contact_email: user.email,
         display_name: user.name,
         dashboard: "express",
-        identity: { country: "ca" },
+        identity: { country: user.country!.toLowerCase() },
         defaults: {
-          currency: "cad",
+          ...(user.country === "CA" ? { currency: "cad" } : {}),
           responsibilities: {
             fees_collector: "application",
             losses_collector: "application",
           },
         },
         configuration: {
+          ...(user.country === "CA"
+            ? {}
+            : {
+                merchant: {
+                  capabilities: { card_payments: { requested: true } },
+                },
+              }),
           recipient: {
             capabilities: {
               stripe_balance: { stripe_transfers: { requested: true } },
@@ -520,11 +583,16 @@ export function createPaymentsRouter(
         metadata: { daywork_user_id: user.id },
       };
       await c.env.DB.prepare(
-        "INSERT OR IGNORE INTO connect_intents (user_id, operation_id, request_json) VALUES (?, ?, ?)",
+        "INSERT OR IGNORE INTO connect_intents (user_id, operation_id, request_json) SELECT id,?,? FROM users WHERE id=? AND country=?",
       )
-        .bind(user.id, crypto.randomUUID(), JSON.stringify(accountRequest))
+        .bind(
+          crypto.randomUUID(),
+          JSON.stringify(accountRequest),
+          user.id,
+          user.country,
+        )
         .run();
-      const operation = (await c.env.DB.prepare(
+      const operation = await c.env.DB.prepare(
         "SELECT * FROM connect_intents WHERE user_id = ?",
       )
         .bind(user.id)
@@ -533,16 +601,42 @@ export function createPaymentsRouter(
           account_id: string | null;
           request_json: string;
           created_at: string;
-        }>())!;
+        }>();
+      if (!operation)
+        throw new HTTPException(409, {
+          message: "Payment country changed. Refresh your profile.",
+        });
       accountId = operation.account_id;
       if (!accountId) {
         freshRetry(operation.created_at);
-        const account = await stripe.v2.core.accounts.create(
-          JSON.parse(
-            operation.request_json,
-          ) as Stripe.V2.Core.AccountCreateParams,
-          { idempotencyKey: `connect-${operation.operation_id}` },
-        );
+        const account = await stripe.v2.core.accounts
+          .create(
+            JSON.parse(
+              operation.request_json,
+            ) as Stripe.V2.Core.AccountCreateParams,
+            { idempotencyKey: `connect-${operation.operation_id}` },
+          )
+          .catch((error: unknown) => {
+            if (
+              error instanceof Stripe.errors.StripeInvalidRequestError ||
+              error instanceof Stripe.errors.StripePermissionError
+            ) {
+              console.error(
+                JSON.stringify({
+                  event: "connect_onboarding_unavailable",
+                  country: user.country,
+                  providerCode: error.code,
+                  parameter: error.param,
+                  providerRequestId: error.requestId,
+                }),
+              );
+              throw new HTTPException(409, {
+                message:
+                  "Stripe could not enable payment setup for this region. Contact support before accepting paid work.",
+              });
+            }
+            throw error;
+          });
         accountId = account.id;
         await c.env.DB.batch([
           c.env.DB.prepare(
@@ -561,13 +655,14 @@ export function createPaymentsRouter(
     }
     // Users explicitly enter onboarding to enable in-app withdrawals. Manual
     // scheduling leaves the choice of instant or standard payout with them.
-    await stripe.balanceSettings.update(
-      { payments: { payouts: { schedule: { interval: "manual" } } } },
-      {
-        stripeAccount: accountId!,
-        idempotencyKey: `manual-payouts-${accountId}-${crypto.randomUUID()}`,
-      },
-    );
+    if (user.country === "CA")
+      await stripe.balanceSettings.update(
+        { payments: { payouts: { schedule: { interval: "manual" } } } },
+        {
+          stripeAccount: accountId!,
+          idempotencyKey: `manual-payouts-${accountId}-${crypto.randomUUID()}`,
+        },
+      );
     const link = await stripe.v2.core.accountLinks.create({
       account: accountId!,
       use_case: {
@@ -598,7 +693,11 @@ export function createPaymentsRouter(
     requirePayable(item, user.id);
     const stripe = makeStripe(c.env);
     const readiness = await connectedAccount(stripe, item.account_id!);
-    if (!readiness.transfersEnabled || !readiness.payoutsEnabled)
+    if (
+      !readiness.transfersEnabled ||
+      !readiness.payoutsEnabled ||
+      readiness.account.identity?.country?.toUpperCase() !== item.worker_country
+    )
       throw new HTTPException(409, {
         message:
           "The worker’s Stripe account is not ready to receive payments.",
@@ -765,6 +864,11 @@ export function createPaymentsRouter(
       );
       requestId = input.requestId;
       payoutInput = input;
+      if (user.country && user.country !== "CA")
+        throw new HTTPException(409, {
+          message:
+            "International bank payouts follow the schedule in your Stripe dashboard.",
+        });
       if (!user.stripe_account_id)
         throw new HTTPException(409, { message: "Connect Stripe first." });
       const stripe = makeStripe(c.env);

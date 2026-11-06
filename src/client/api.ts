@@ -1,3 +1,4 @@
+import { locale } from "./locale";
 import { feeCents, CATEGORIES } from "../shared/types";
 export type Role = "worker" | "poster" | "both";
 export type User = {
@@ -6,6 +7,7 @@ export type User = {
   name: string;
   role: Role;
   bio: string;
+  country?: string | null;
   city: string;
   skills: string[] | string;
   created_at: string;
@@ -17,6 +19,7 @@ export type Config = {
   listingsReady: boolean;
   currency: string;
   region: string;
+  workerPayoutCountries?: string[];
   authReady: boolean;
   paymentsReady: boolean;
   instantPayoutsEnabled?: boolean;
@@ -37,6 +40,7 @@ export type Job = {
   title: string;
   description: string;
   category: string;
+  country?: string | null;
   city: string;
   area: string;
   start_date: string;
@@ -67,6 +71,7 @@ export type Application = {
   worker_id: string;
   worker_name?: string;
   worker_bio?: string;
+  worker_country?: string | null;
   worker_city?: string;
   worker_skills?: string | string[];
   name?: string;
@@ -159,8 +164,9 @@ export function safeInternalPath(
 export const post = <T>(path: string, data: unknown = {}) =>
   api<T>(path, { method: "POST", body: JSON.stringify(data) });
 export const money = (cents: number) =>
-  new Intl.NumberFormat("en-CA", {
+  new Intl.NumberFormat(locale, {
     style: "currency",
+    currencyDisplay: "narrowSymbol",
     currency: "CAD",
     maximumFractionDigits: cents % 100 === 0 ? 0 : 2,
   }).format(cents / 100);
@@ -171,7 +177,7 @@ export const dateLabel = (value: string) => {
   const date = new Date(value.length === 10 ? `${value}T12:00:00` : value);
   return Number.isNaN(date.getTime())
     ? value
-    : new Intl.DateTimeFormat("en-CA", {
+    : new Intl.DateTimeFormat(locale, {
         month: "short",
         day: "numeric",
         year: "numeric",

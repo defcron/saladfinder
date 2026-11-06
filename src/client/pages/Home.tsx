@@ -1,9 +1,11 @@
+import { displayLabel, locale } from "../locale";
 import { useEffect, useState, type FormEvent } from "react";
 import { useSearchParams, Link } from "react-router-dom";
 import { MapPin, Search, ArrowRight } from "lucide-react";
 import { api, categories, examples, type Job } from "../api";
 import { useApp } from "../context";
 import { Alert, Empty, JobRow, Loading, PreviewNotice } from "../components";
+import { CountrySelect } from "../region";
 export function Home() {
   const { config } = useApp();
   const [params, setParams] = useSearchParams();
@@ -92,14 +94,16 @@ export function Home() {
             <br />A shorter wait for payday.
           </h1>
           <p>
-            Find local jobs with clear pay and agreed milestones. Get paid as
-            work is approved.
+            Find local jobs and agree on milestones. Post and apply worldwide.
+            Check payout availability for your country before arranging paid
+            work.
           </p>
         </div>
         <aside className="ontario-note">
           <MapPin size={29} strokeWidth={1.5} aria-hidden="true" />
           <div>
-            <h2>Made for Ontario</h2>
+            <h2>Find work worldwide</h2>
+            <Link to="/pricing#payout-regions">Check payout availability</Link>
             <p>
               {config?.pricingEnabled
                 ? "CAD payments · Clear fees before you agree"
@@ -123,8 +127,8 @@ export function Home() {
         <div className="search-input">
           <MapPin size={23} aria-hidden="true" />
           <input
-            aria-label="Ontario city"
-            placeholder="Ontario city (e.g., Toronto, Hamilton, Ottawa)"
+            aria-label="City or locality"
+            placeholder="City or locality"
             value={location}
             onChange={(e) => setLocation(e.target.value)}
             maxLength={80}
@@ -136,6 +140,11 @@ export function Home() {
       </form>
       <div className="market-layout">
         <aside className="filter-rail" aria-label="Filter jobs">
+          <CountrySelect
+            all
+            value={params.get("country") || ""}
+            onChange={(value) => change("country", value)}
+          />
           <fieldset>
             <legend>Job category</legend>
             {["All work", ...categories].map((label) => (
@@ -152,7 +161,7 @@ export function Home() {
                     )
                   }
                 />
-                <span>{label}</span>
+                <span>{displayLabel(label)}</span>
               </label>
             ))}
           </fieldset>
@@ -171,11 +180,11 @@ export function Home() {
                   checked={schedule === value}
                   onChange={() => change("schedule", value)}
                 />
-                <span>{label}</span>
+                <span>{displayLabel(label)}</span>
               </label>
             ))}
           </fieldset>
-          {(q || city || category || schedule) && (
+          {(q || city || category || schedule || params.has("country")) && (
             <button className="text-button" onClick={() => setParams({})}>
               Clear all filters
             </button>
@@ -186,9 +195,14 @@ export function Home() {
             <h2>Work, on your terms</h2>
             {!loading && !error && (
               <p className="results-label">
-                {showExamples
-                  ? "Example listings · not available to book"
-                  : `${total} ${total === 1 ? "job" : "jobs"} available`}
+                {showExamples ? (
+                  "Example listings · not available to book"
+                ) : (
+                  <>
+                    {displayLabel("Available jobs")} ·{" "}
+                    {new Intl.NumberFormat(locale).format(total)}
+                  </>
+                )}
               </p>
             )}
           </div>

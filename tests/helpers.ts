@@ -96,7 +96,7 @@ export async function login(
   const res = await request(app, env, "/auth/request", "POST", {
     email,
     name,
-    role: "both",
+    role: "both", country:"CA",
     consent: true,
   });
   const data = (await res.json()) as { devToken: string };

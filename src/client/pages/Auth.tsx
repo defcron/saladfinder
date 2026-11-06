@@ -1,3 +1,4 @@
+import { displayLabel } from "../locale";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { ArrowRight, Mail } from "lucide-react";
@@ -11,8 +12,11 @@ import {
   Turnstile,
   useAction,
 } from "../components";
+import { language } from "../locale";
+import { CountrySelect } from "../region";
 export function SignIn() {
   const { config, user } = useApp();
+  const [country, setCountry] = useState("");
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
   const [role, setRole] = useState<Role>("worker");
@@ -32,6 +36,8 @@ export function SignIn() {
           name: name.trim() || undefined,
           role,
           consent: true,
+          language,
+          country: country || undefined,
           turnstileToken: token,
         });
         setSent(true);
@@ -129,6 +135,7 @@ export function SignIn() {
               placeholder="What should we call you?"
             />
           </label>
+          <CountrySelect value={country} onChange={setCountry} />
           <fieldset className="form-fieldset">
             <legend>I’m here to</legend>
             <div className="choice-row">
@@ -147,7 +154,7 @@ export function SignIn() {
                     checked={role === value}
                     onChange={() => setRole(value)}
                   />
-                  {label}
+                  {displayLabel(label)}
                 </label>
               ))}
             </div>

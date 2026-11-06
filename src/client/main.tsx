@@ -1,4 +1,5 @@
-import { StrictMode } from "react";
+import { subscribeLocale, localeVersion } from "./locale";
+import { useSyncExternalStore, StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter, Routes, Route, Link } from "react-router-dom";
 import { AppProvider, useApp } from "./context";
@@ -10,6 +11,7 @@ import { Dashboard, Account, Admin } from "./pages/Account";
 import { Waitlist, Pricing, HowItWorks, InfoPage } from "./pages/Info";
 import "./styles.css";
 function App() {
+  useSyncExternalStore(subscribeLocale, localeVersion);
   const { loading, error, reload } = useApp();
   return (
     <Layout>

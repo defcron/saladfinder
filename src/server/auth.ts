@@ -1,3 +1,4 @@
+import { isCountry } from "../shared/regions";
 import { Hono } from "hono";
 import { createMiddleware } from "hono/factory";
 import { getCookie, setCookie, deleteCookie } from "hono/cookie";
@@ -33,7 +34,7 @@ export const loadUser = createMiddleware<AppEnv>(async (c, next) => {
   const token = getCookie(c, cookieName(c.env, c.req.url));
   if (token && /^[a-f0-9]{64}$/.test(token)) {
     const row = await c.env.DB.prepare(
-      "SELECT u.id,u.email,u.name,u.role,u.bio,u.city,u.skills,u.created_at,u.stripe_account_id,u.suspended_at FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=? AND s.expires_at>?",
+      "SELECT u.id,u.email,u.name,u.role,u.bio,u.city,u.country,u.skills,u.created_at,u.stripe_account_id,u.suspended_at FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=? AND s.expires_at>?",
     )
       .bind(await digest(token), Math.floor(Date.now() / 1000))
       .first<UserRow>();
@@ -42,6 +43,8 @@ export const loadUser = createMiddleware<AppEnv>(async (c, next) => {
   await next();
 });
 const authRequest = z.object({
+  language: z.string().max(35).optional(),
+  country: z.string().refine(isCountry).optional(),
   email: z
     .email()
     .max(254)
@@ -67,13 +70,14 @@ auth.post("/auth/request", async (c) => {
   const tokenHash = await digest(token);
   const now = Math.floor(Date.now() / 1000);
   await c.env.DB.prepare(
-    "INSERT INTO auth_tokens (token_hash,email,name,role,expires_at,created_at) VALUES (?,?,?,?,?,?)",
+    "INSERT INTO auth_tokens (token_hash,email,name,role,country,expires_at,created_at) VALUES (?,?,?,?,?,?,?)",
   )
     .bind(
       tokenHash,
       body.email,
       body.name || "SaladFinder member",
       body.role,
+      body.country ?? null,
       now + 900,
       now,
     )
@@ -87,7 +91,7 @@ auth.post("/auth/request", async (c) => {
   const url = `${new URL(c.env.APP_URL).origin}/auth/verify#token=${token}`;
   let delivered = false;
   try {
-    await sendSignInEmail(c.env, body.email, url);
+    await sendSignInEmail(c.env, body.email, url, body.language);
     delivered = true;
   } catch {
     delivered = false;
@@ -113,29 +117,35 @@ auth.post("/auth/verify", async (c) => {
   await rateLimit(c, "verify-ip", requestIp(c), 20, 900);
   const now = Math.floor(Date.now() / 1000);
   const row = await c.env.DB.prepare(
-    "DELETE FROM auth_tokens WHERE token_hash=? AND expires_at>? RETURNING email,name,role",
+    "DELETE FROM auth_tokens WHERE token_hash=? AND expires_at>? RETURNING email,name,role,country",
   )
     .bind(await digest(token), now)
-    .first<{ email: string; name: string; role: string }>();
+    .first<{
+      email: string;
+      name: string;
+      role: string;
+      country: string | null;
+    }>();
   if (!row)
     throw new HTTPException(400, {
       message:
         "This sign-in link has expired or was already used. Request a new link.",
     });
   await c.env.DB.prepare(
-    "INSERT INTO users (id,email,name,role,consent_at,terms_version) VALUES (?,?,?,?,?,?) ON CONFLICT(email) DO NOTHING",
+    "INSERT INTO users (id,email,name,role,country,consent_at,terms_version) VALUES (?,?,?,?,?,?,?) ON CONFLICT(email) DO NOTHING",
   )
     .bind(
       crypto.randomUUID(),
       row.email,
       row.name,
       row.role,
+      row.country,
       new Date().toISOString(),
       POLICY_VERSION,
     )
     .run();
   const user = await c.env.DB.prepare(
-    "SELECT id,email,name,role,bio,city,skills,created_at,stripe_account_id,suspended_at FROM users WHERE email=?",
+    "SELECT id,email,name,role,bio,city,country,skills,created_at,stripe_account_id,suspended_at FROM users WHERE email=?",
   )
     .bind(row.email)
     .first<UserRow>();
@@ -168,22 +178,32 @@ auth.patch("/me", requireUser, async (c) => {
     z.object({
       name: z.string().trim().min(2).max(80),
       bio: z.string().trim().max(1500),
+      country: z.string().refine(isCountry).optional(),
       city: z.string().trim().max(80),
       skills: z.array(z.string().trim().min(1).max(40)).max(15),
     }),
   );
   const user = c.get("user")!;
-  await c.env.DB.prepare(
-    "UPDATE users SET name=?,bio=?,city=?,skills=? WHERE id=?",
+  const updated = await c.env.DB.prepare(
+    "UPDATE users SET name=?,bio=?,city=?,skills=?,country=COALESCE(?,country) WHERE id=? AND (? IS NULL OR country=? OR (country IS NULL AND ?='CA') OR (stripe_account_id IS NULL AND NOT EXISTS (SELECT 1 FROM connect_intents WHERE user_id=users.id) AND NOT EXISTS (SELECT 1 FROM jobs WHERE worker_id=users.id AND status IN ('assigned','in_progress','disputed'))))",
   )
     .bind(
       input.name,
       input.bio,
       input.city,
       JSON.stringify(input.skills),
+      input.country ?? null,
       user.id,
+      input.country ?? null,
+      input.country ?? null,
+      input.country ?? null,
     )
     .run();
+  if (!updated.meta.changes)
+    throw new HTTPException(409, {
+      message:
+        "Contact support to change country after payment setup or during active work.",
+    });
   return c.json({ user: { ...user, ...input } });
 });
 auth.post("/auth/logout", async (c) => {

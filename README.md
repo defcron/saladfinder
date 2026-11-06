@@ -2,7 +2,9 @@
 
 # SaladFinder
 
-An Ontario/CAD local-services marketplace built with React, Cloudflare Workers, D1 and Stripe Connect. Customers can post jobs, choose workers and pay approved milestones through Stripe Checkout. Workers can apply for jobs and request standard bank payouts when their account and funds are eligible.
+A worldwide local-services marketplace with CAD pricing built with React, Cloudflare Workers, D1 and Stripe Connect. Customers can post jobs, choose workers and pay approved milestones through Stripe Checkout. Workers can apply for jobs and request standard bank payouts when their account and funds are eligible.
+
+People can post and apply from all supported country and territory locations. The pricing page lists where paid hiring is enabled. Language selection, settlement coverage and rollout details are in [international operations](docs/INTERNATIONAL.md).
 
 **Launch status: live paid pilot.** Posting, applications, hiring, work messages, milestones, live Checkout and standard bank payout requests are enabled. **Instant Payouts: Coming later** — disabled in production pending Stripe eligibility. No activation date or same-day bank arrival is promised.
 

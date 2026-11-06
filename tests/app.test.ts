@@ -102,10 +102,10 @@ describe("assembled Worker", () => {
     const now = Math.floor(Date.now() / 1000);
     await fixture.env.DB.batch([
       fixture.env.DB.prepare(
-        "INSERT INTO auth_tokens VALUES (?,?,?,?,?,?)",
+        "INSERT INTO auth_tokens(token_hash,email,name,role,expires_at,created_at) VALUES (?,?,?,?,?,?)",
       ).bind("expired", "a@example.test", "A", "worker", now - 1, now - 1000),
       fixture.env.DB.prepare(
-        "INSERT INTO auth_tokens VALUES (?,?,?,?,?,?)",
+        "INSERT INTO auth_tokens(token_hash,email,name,role,expires_at,created_at) VALUES (?,?,?,?,?,?)",
       ).bind("active", "b@example.test", "B", "worker", now + 900, now),
       fixture.env.DB.prepare("INSERT INTO rate_limits VALUES (?,?,?)").bind(
         "expired",
