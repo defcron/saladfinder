@@ -1,3 +1,4 @@
+import { headline } from "./brand-copy";
 import catalog from "../shared/messages.json";
 import i18next from "i18next";
 import { languageFor, languages } from "../shared/languages";
@@ -91,6 +92,8 @@ async function fetchMessages() {
 }
 export function message(id: string, source: string) {
   if (language === "en") return source;
+  const editorial = headline(language, source);
+  if (editorial) return editorial;
   if (!requested.has(id)) {
     requested.add(id);
     pending.add(id);
