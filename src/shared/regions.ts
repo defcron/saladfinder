@@ -16,3 +16,6 @@ export const payoutCountries =
   );
 export const supportsPayouts = (country?: string | null) =>
   payoutCountries.includes(country || "");
+export function enabledCountries(crossBorderFlag?:string) {
+  return crossBorderFlag === "true" ? payoutCountries : ["CA"];
+}

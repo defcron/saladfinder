@@ -98,6 +98,7 @@ test("two users complete posting, application, hire, private messages and milest
   await page.getByLabel("Your name", { exact: false }).fill("Pilot Customer");
   await page.getByRole("radio", { name: "Hire help", exact: true }).check();
   await page.getByRole("checkbox").check();
+  await page.getByLabel("Country or territory").selectOption("CA");
   await page.getByRole("button", { name: "Email me a sign-in link" }).click();
   await page.getByRole("link", { name: "Open your sign-in link" }).click();
   await expect(page).toHaveURL(/\/dashboard$/);

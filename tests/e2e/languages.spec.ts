@@ -29,8 +29,8 @@ test("loads Arabic copy, preserves ISO form values and remembers an English over
       page.getByRole("button", { name: "ابحث عن عمل" }),
     ).toBeVisible();
     const country = page.getByLabel("Country or territory");
-    await country.selectOption("EG");
-    await expect(page).toHaveURL(/country=EG/);
+    await country.selectOption("CA");
+    await expect(page).toHaveURL(/country=CA/);
     await page
       .getByRole("combobox", { name: "Language", exact: true })
       .selectOption("en");

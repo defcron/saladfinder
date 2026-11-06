@@ -1,6 +1,6 @@
 # Regions, languages and settlement
 
-Profiles and job listings accept the 249 ISO 3166-1 alpha-2 countries and territories plus Kosovo (XK). Store the code and display its localized CLDR name with Intl.DisplayNames. A profile country describes the worker’s payout jurisdiction. Job location and poster location are independent. Imported Ontario listings have country CA. Existing profiles without Stripe setup can choose a country in Account. For existing API clients, a new job with no country or time zone retains the Ontario defaults. The frontend sends an explicit country and an IANA time zone.
+Profiles can record the 249 ISO 3166-1 alpha-2 countries and territories plus Kosovo (XK). Store the code and display its localized CLDR name with Intl.DisplayNames. A profile country describes the worker’s payout jurisdiction. Job location and poster location are independent. Imported Ontario listings have country CA. Existing profiles without Stripe setup can choose a country in Account. For existing API clients, a new job with no country or time zone retains the Ontario defaults. The frontend sends an explicit country and an IANA time zone.
 
 ## Customer experience
 
@@ -12,7 +12,7 @@ Run `npm run i18n:extract` when changing interface or validation copy and includ
 
 ## Paid work
 
-The pricing page reads the active countries from `/api/config`. Listings and applications can cover more countries than paid hiring. The Canadian pilot uses CAD balances and manually requested Stripe payouts. In the cross-border path, the worker selects their actual country, completes Stripe-hosted onboarding, and must have active transfer and payout capabilities before hire. Stripe handles bank settlement and its schedule for those accounts. All client Checkout amounts and webhooks remain denominated in CAD.
+The pricing page reads the active countries from `/api/config`. New listings require an enabled job country and poster profile country. Applications also require an enabled worker profile country. The API enforces these checks independently of the form controls. The Canadian pilot uses CAD balances and manually requested Stripe payouts. In the cross-border path, the worker selects their actual country, completes Stripe-hosted onboarding, and must have active transfer and payout capabilities before hire. Stripe handles bank settlement and its schedule for those accounts. All client Checkout amounts and webhooks remain denominated in CAD.
 
 `CROSS_BORDER_PAYOUTS_ENABLED` gates new international onboarding and hiring independently of the Canadian pilot. Keep production disabled until the regional Stripe key permissions and the actual destination-charge lifecycle pass in the SaladFinder sandbox. Stripe documents self-serve Canadian-platform transfers to Canada, the US, the UK, Switzerland and the EEA, with account and flow limitations. This provider list is a ceiling on availability. [Stripe cross-border payouts](https://docs.stripe.com/connect/cross-border-payouts)
 

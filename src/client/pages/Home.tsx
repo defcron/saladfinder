@@ -94,7 +94,7 @@ export function Home() {
             <br />A shorter wait for payday.
           </h1>
           <p>
-            Find local jobs and agree on milestones. Post and apply worldwide.
+            Find local jobs and agree on milestones. Post and apply in supported Stripe Connect regions.
             Check payout availability for your country before arranging paid
             work.
           </p>
@@ -102,7 +102,7 @@ export function Home() {
         <aside className="ontario-note">
           <MapPin size={29} strokeWidth={1.5} aria-hidden="true" />
           <div>
-            <h2>Find work worldwide</h2>
+            <h2>Where you can work</h2>
             <Link to="/pricing#payout-regions">Check payout availability</Link>
             <p>
               {config?.pricingEnabled
@@ -140,7 +140,7 @@ export function Home() {
       </form>
       <div className="market-layout">
         <aside className="filter-rail" aria-label="Filter jobs">
-          <CountrySelect
+          <CountrySelect allowed={config?.workerPayoutCountries || ["CA"]}
             all
             value={params.get("country") || ""}
             onChange={(value) => change("country", value)}

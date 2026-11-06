@@ -12,12 +12,14 @@ export function CountrySelect({
   all = false,
   required = false,
   disabled = false,
+  allowed,
 }: {
   value: string;
   onChange: (value: string) => void;
   all?: boolean;
   required?: boolean;
   disabled?: boolean;
+  allowed?:string[];
 }) {
   return (
     <label>
@@ -31,7 +33,7 @@ export function CountrySelect({
         <option value="">
           {all ? "All locations" : "Choose a country or territory"}
         </option>
-        {ordered.map((code) => (
+        {ordered.filter(code=>!allowed || allowed.includes(code)).map((code) => (
           <option key={code} value={code}>
             {countryName(code)}
           </option>

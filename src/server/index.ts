@@ -3,7 +3,7 @@ import { bodyLimit } from "hono/body-limit";
 import { secureHeaders } from "hono/secure-headers";
 import { HTTPException } from "hono/http-exception";
 import { ZodError } from "zod";
-import { payoutCountries } from "../shared/regions";
+import { enabledCountries } from "../shared/regions";
 import { translations } from "./translations";
 import { auth, loadUser } from "./auth";
 import { marketplace } from "./marketplace";
@@ -59,7 +59,7 @@ app.get("/api/config", async (c) =>
     currency: "CAD",
     region: "Global",
     workerPayoutCountries:
-      c.env.CROSS_BORDER_PAYOUTS_ENABLED === "true" ? payoutCountries : ["CA"],
+      enabledCountries(c.env.CROSS_BORDER_PAYOUTS_ENABLED),
     authReady: isSignInReady(c.env, c.req.url),
     paymentMode: stripeMode(c.env),
     instantPayoutsEnabled: c.env.INSTANT_PAYOUTS_ENABLED === "true",

@@ -320,7 +320,7 @@ export function Pricing() {
       <section className="content-section" id="payout-regions">
         <h2>Where workers can get paid</h2>
         <p>
-          Post jobs and apply worldwide. Paid hiring depends on the worker’s
+          Post and apply only in the enabled regions listed below. Paid hiring depends on the worker’s
           payout country and Stripe eligibility. All agreements and
           subscriptions use Canadian dollars.
         </p>

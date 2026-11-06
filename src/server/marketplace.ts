@@ -1,4 +1,4 @@
-import { isCountry, calendarDate } from "../shared/regions";
+import { isCountry, calendarDate, enabledCountries } from "../shared/regions";
 import { currentPlan } from "./billing";
 import {
   transactionFee,
@@ -36,6 +36,10 @@ export const marketplace = new Hono<AppEnv>();
 function fail(status: 400 | 403 | 404 | 409, message: string): never {
   throw new HTTPException(status, { message });
 }
+function requireMarketCountry(env:Env,country:string|null|undefined) {
+  if(!country || !enabledCountries(env.CROSS_BORDER_PAYOUTS_ENABLED).includes(country))
+    fail(403,"Posting and applying require an enabled Stripe Connect region. Check the country in your profile and the job location.");
+}
 const jobSelect =
   "SELECT j.*,u.name AS poster_name,w.name AS worker_name FROM jobs j JOIN users u ON u.id=j.poster_id LEFT JOIN users w ON w.id=j.worker_id";
 async function getJob(db: D1Database, id: string): Promise<Job> {
@@ -66,7 +70,9 @@ marketplace.get("/jobs", async (c) => {
   if (!query.success) fail(400, "Invalid search filters.");
   const { q, city, category, schedule, page } = query.data;
   const where = ["j.status='open'", "u.suspended_at IS NULL"];
-  const values: (string | number)[] = [];
+  const regions=enabledCountries(c.env.CROSS_BORDER_PAYOUTS_ENABLED);
+  where.push("j.country IN ("+regions.map(()=>"?").join(",")+")");
+  const values: (string | number)[] = [...regions];
   const literal = (v: string) => v.replace(/[\\%_]/g, "\\$&");
   if (q) {
     where.push(
@@ -222,6 +228,8 @@ const jobInput = z.object({
 marketplace.post("/jobs", requireUser, requireListings, async (c) => {
   const body = await jsonInput(c, jobInput);
   const user = c.get("user")!;
+  requireMarketCountry(c.env,user.country);
+  requireMarketCountry(c.env,body.country);
   await rateLimit(c, "post-job", user.id, 20, 86400);
   const feePlan: FeePlan =
     c.env.PRICING_ENABLED === "true"
@@ -298,6 +306,8 @@ marketplace.post("/jobs/:id/apply", requireUser, requireListings, async (c) => {
   );
   const user = c.get("user")!;
   const job = await getJob(c.env.DB, c.req.param("id"));
+  requireMarketCountry(c.env,user.country);
+  requireMarketCountry(c.env,job.country);
   if (job.poster_id === user.id) fail(400, "You cannot apply to your own job.");
   if (job.status !== "open")
     fail(409, "This job is no longer accepting applications.");
@@ -366,6 +376,8 @@ marketplace.post("/jobs/:id/hire", requireUser, requireLive, async (c) => {
   const job = await getJob(c.env.DB, id);
   if (job.poster_id !== user.id)
     fail(403, "Only the job poster can hire a worker.");
+  requireMarketCountry(c.env,user.country);
+  requireMarketCountry(c.env,job.country);
   const application = await c.env.DB.prepare(
     "SELECT a.*,u.country AS worker_country,u.stripe_account_id AS account_id FROM applications a JOIN users u ON u.id=a.worker_id WHERE a.id=? AND a.job_id=? AND a.status='pending' AND u.suspended_at IS NULL",
   )

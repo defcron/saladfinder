@@ -388,7 +388,7 @@ export function Account() {
                   ) &&
                     !user?.stripe_account_id && (
                       <Alert kind="info">
-                        Worldwide listings and applications are open. See the
+                        Posting and applying require a supported work region. See the
                         available payout countries on the pricing page. Save
                         your country in your profile before payment setup.
                       </Alert>

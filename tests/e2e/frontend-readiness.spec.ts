@@ -9,7 +9,7 @@ async function signIn(context: BrowserContext, role = "both") {
       email: `readiness-${crypto.randomUUID()}@example.test`,
       name: "Readiness Worker",
       role,
-      consent: true,
+      consent: true, country:"CA",
     },
   });
   expect(response.ok()).toBeTruthy();
@@ -259,6 +259,7 @@ test("job draft and requested destination survive email sign-in", async ({
     .fill(`draft-${crypto.randomUUID()}@example.test`);
   await page.getByLabel("Your name", { exact: false }).fill("Draft Poster");
   await page.getByRole("checkbox").check();
+  await page.getByLabel("Country or territory").selectOption("CA");
   await page.getByRole("button", { name: "Email me a sign-in link" }).click();
   await page.getByRole("link", { name: "Open your sign-in link" }).click();
   await expect(page).toHaveURL(/\/post$/);

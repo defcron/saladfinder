@@ -19,22 +19,32 @@ it("stores international jobs separately and filters by ISO country", async () =
     const api = testApp();
     const { env } = fixture;
     env.LAUNCH_MODE = "live";
+    env.CROSS_BORDER_PAYOUTS_ENABLED="true";
     const poster = await login(api, env, "jp@example.test");
     const post = await request(
       api,
       env,
       "/jobs",
       "POST",
-      { ...jobBody(), country: "JP", city: "津", timeZone: "Asia/Tokyo" },
+      { ...jobBody(), country: "FR", city: "Y", timeZone: "Europe/Paris" },
       poster.cookie,
     );
     expect(post.status, await post.clone().text()).toBe(201);
     expect(
-      await (await request(api, env, "/jobs?country=JP")).json(),
+      await (await request(api, env, "/jobs?country=FR")).json(),
     ).toMatchObject({ total: 1 });
     expect(
       await (await request(api, env, "/jobs?country=CA")).json(),
     ).toMatchObject({ total: 0 });
+    const job=(await post.json()) as {job:{id:string}};
+    const worker=await login(api,env,"unsupported@example.test");
+    const profile={name:"Test Member",skills:[],city:"津",bio:"",country:"JP"};
+    expect((await request(api,env,"/me","PATCH",profile,worker.cookie)).status).toBe(200);
+    expect((await request(api,env,"/jobs","POST",{...jobBody(),country:"JP"},poster.cookie)).status).toBe(403);
+    expect((await request(api,env,"/jobs","POST",jobBody(),worker.cookie)).status).toBe(403);
+    expect((await request(api,env,"/jobs/"+job.job.id+"/apply","POST",{message:"I can do this work on the agreed date."},worker.cookie)).status).toBe(403);
+    env.CROSS_BORDER_PAYOUTS_ENABLED="false";
+    expect(await (await request(api,env,"/jobs?country=FR")).json()).toMatchObject({total:0});
     expect((await request(api, env, "/jobs?country=XX")).status).toBe(400);
   } finally {
     await fixture.dispose();

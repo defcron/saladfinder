@@ -249,7 +249,7 @@ export function PostJob() {
                   ))}
                 </select>
               </label>
-              <CountrySelect value={country} onChange={setCountry} required />
+              <CountrySelect allowed={config?.workerPayoutCountries || ["CA"]} value={country} onChange={setCountry} required />
               <label>
                 City or locality
                 <input
@@ -405,10 +405,12 @@ export function PostJob() {
             <Link className="button" to="/sign-in?next=%2Fpost">
               Sign in to publish <ArrowRight size={18} />
             </Link>
+          ) : !(config?.workerPayoutCountries || ["CA"]).includes(user.country || "") ? (
+            <p>Posting requires a profile in an enabled work region. <Link to="/account">Review your country</Link></p>
           ) : (
             <button
               className="button"
-              disabled={action.busy || budget > 500000}
+              disabled={action.busy || budget > 500000 || !(config?.workerPayoutCountries || ["CA"]).includes(country)}
             >
               {action.busy ? "Publishing…" : "Publish job"}
               <ArrowRight size={18} />
@@ -978,7 +980,7 @@ export function JobPage() {
                     : "Sound like your kind of work?"}
             </h2>
             <p>
-              Workers can apply worldwide. Paid hiring requires a supported
+              Applications and paid hiring require a supported
               worker payout country. International workers must finish Stripe
               verification before hire. Agree on the scope and payment stages
               before starting. Take work only when you have the skills, tools,
@@ -1076,6 +1078,8 @@ export function JobPage() {
                 >
                   Sign in to apply <ArrowRight size={17} />
                 </Link>
+              ) : !(config?.workerPayoutCountries || ["CA"]).includes(user.country || "") || !(config?.workerPayoutCountries || ["CA"]).includes(job.country || "") ? (
+                <p>Applications require an enabled worker country and job location. <Link to="/account">Review your profile country</Link></p>
               ) : (
                 <form
                   className="form-stack"
