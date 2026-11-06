@@ -14,7 +14,13 @@ describe("Sites frontend gateway", () => {
     expect(await response.text()).toBe("SPA");
     expect(response.headers.has("set-cookie")).toBe(false);
     expect(response.headers.get("content-security-policy")).toContain("frame-ancestors 'none'");
-    expect(response.headers.get("cache-control")).toBe("no-cache");
+    expect(response.headers.get("cache-control")).toBe("no-cache, no-transform");
+  });
+  it("serves the recovery UI with HTTP 404 for an unknown page", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("SPA")));
+    const response = await frontend(new Request("https://saladfinder.com/missing"), env);
+    expect(response.status).toBe(404);
+    expect(await response.text()).toBe("SPA");
   });
   it.each(["/assets/app.js", "/brand/logo.svg", "/favicon.svg", "/apple-touch-icon.png", "/robots.txt", "/sites-canonical.js"])("preserves asset path %s and strips query", async (path) => {
     const upstream = vi.fn().mockResolvedValue(new Response("asset"));

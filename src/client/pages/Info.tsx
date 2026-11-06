@@ -287,10 +287,11 @@ export function Pricing() {
   const [workerPlan, setWorkerPlan] = useState<Plan>("standard");
   const [pay, setPay] = useState("100");
   const [count, setCount] = useState("1");
-  const amount = Math.min(
-    500000,
-    Math.max(0, Math.round(Number(pay || 0) * 100)),
-  );
+  const dollars = Number(pay);
+  const cents = Math.round(dollars * 100);
+  const validPay = dollars >= 25 && dollars <= 5000 &&
+    Math.abs(dollars * 100 - cents) < 1e-8;
+  const amount = validPay ? cents : 0;
   const milestones = Math.max(1, Math.min(5, Number(count) || 1));
   const fee =
     transactionFee(
@@ -405,7 +406,7 @@ export function Pricing() {
               </label>
             </div>
           )}
-          <dl className="price-breakdown">
+          {validPay ? <dl className="price-breakdown">
             <div>
               <dt>Worker receives</dt>
               <dd>{money(worker - workerFees)}</dd>
@@ -424,7 +425,7 @@ export function Pricing() {
               <dt>Client total</dt>
               <dd>{money(worker + fee)} CAD</dd>
             </div>
-          </dl>
+          </dl> : <p role="status">Enter a milestone amount from $25 to $5,000 CAD with up to two decimal places to see the estimate.</p>}
           <p className="small-text">
             Excludes monthly subscriptions and any applicable taxes. Job
             maximum: $5,000 CAD in gross worker pay. Final amounts are

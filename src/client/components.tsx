@@ -366,6 +366,7 @@ export function Turnstile({
   return siteKey ? (
     <div
       className="verification"
+      role="group"
       ref={ref}
       aria-label="Security verification"
     />

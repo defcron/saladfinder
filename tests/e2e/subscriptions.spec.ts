@@ -34,6 +34,14 @@ test("plan comparison and calculator show each participant fee without promising
   await page.getByLabel("Worker plan", { exact: true }).selectOption("premium");
   await expect(page.locator(".calculator")).toContainText("$109.40");
   await expect(page.locator(".calculator")).toContainText("$94.80");
+  const amount = page.getByLabel("Worker pay per milestone (CAD)");
+  for (const invalid of ["", "0", "24.99", "5000.01", "25.005"]) {
+    await amount.fill(invalid);
+    await expect(page.locator(".price-breakdown")).toHaveCount(0);
+    await expect(page.getByRole("status")).toContainText("Enter a milestone amount");
+  }
+  await amount.fill("25");
+  await expect(page.locator(".price-breakdown")).toBeVisible();
   expect(
     await page.evaluate(
       () => document.documentElement.scrollWidth <= innerWidth + 1,

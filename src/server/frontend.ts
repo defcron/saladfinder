@@ -8,6 +8,7 @@ export async function frontend(request: Request, env: AppBindings): Promise<Resp
   const path = new URL(request.url).pathname;
   const asset = path.startsWith("/assets/") || path.startsWith("/brand/") ||
     ["/favicon.svg", "/apple-touch-icon.png", "/robots.txt", "/sites-canonical.js"].includes(path);
+  const pageRoute = /^\/(?:sign-in|auth\/verify|post|jobs\/[^/]+|dashboard|account|admin|early-access|pricing|how-it-works|trust|terms|privacy)?\/?$/i.test(path);
   const target = new URL(SITE_ORIGIN);
   target.pathname = asset ? path : "/";
   // Never send visitor cookies, auth headers, query tokens, or referers to Sites.
@@ -19,7 +20,7 @@ export async function frontend(request: Request, env: AppBindings): Promise<Resp
   }
   const headers = new Headers();
   headers.set("Content-Type", upstream.headers.get("Content-Type") || "application/octet-stream");
-  headers.set("Cache-Control", upstream.ok && path.startsWith("/assets/") ? "public, max-age=31536000, immutable" : "no-cache");
+  headers.set("Cache-Control", upstream.ok && path.startsWith("/assets/") ? "public, max-age=31536000, immutable" : asset ? "no-cache" : "no-cache, no-transform");
   headers.set("X-Content-Type-Options", "nosniff");
   headers.set("Referrer-Policy", "no-referrer");
   headers.set("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
@@ -27,5 +28,5 @@ export async function frontend(request: Request, env: AppBindings): Promise<Resp
   headers.set("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
   headers.set("Content-Security-Policy", "default-src 'self'; script-src 'self' https://challenges.cloudflare.com; style-src 'self'; img-src 'self' data:; connect-src 'self' https://challenges.cloudflare.com; frame-src https://challenges.cloudflare.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'");
   headers.set("X-SaladFinder-Frontend", "sites");
-  return new Response(request.method === "HEAD" ? null : upstream.body, { status: upstream.status, headers });
+  return new Response(request.method === "HEAD" ? null : upstream.body, { status: upstream.ok && !asset && !pageRoute ? 404 : upstream.status, headers });
 }
