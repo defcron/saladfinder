@@ -110,8 +110,12 @@ export function Waitlist() {
           {manage
             ? "You’re in control of your signup. Use your private link to remove it at any time."
             : joined
-              ? "Thanks for your interest. We’re preparing the marketplace before opening real jobs and payments."
-              : "Be first to hear when SaladFinder opens near you. Tell us a little about what you’re looking for."}
+              ? config?.launchMode === "preview"
+                ? "Thanks for your interest. We’re preparing the marketplace before opening real jobs and payments."
+                : "Thanks for your interest. Jobs and payments are live now — browse listings or post work today."
+              : config?.launchMode === "preview"
+                ? "Be first to hear when SaladFinder opens near you. Tell us a little about what you’re looking for."
+                : "Jobs and payments are live now. Join the list to hear about new work near you."}
         </p>
       </PageHeading>
       <ActionFeedback {...action} />
@@ -259,8 +263,9 @@ export function Waitlist() {
             <ArrowRight size={18} />
           </button>
           <p className="small-text">
-            No jobs or payments are available in this preview. Your signup is
-            stored; no confirmation email is sent at this stage.
+            {config?.launchMode === "preview"
+              ? "No jobs or payments are available in this preview. Your signup is stored; no confirmation email is sent at this stage."
+              : "Your signup is stored; no confirmation email is sent at this stage."}
           </p>
           {removalToken && (
             <button
@@ -597,7 +602,7 @@ export function InfoPage({ kind }: { kind: "trust" | "terms" | "privacy" }) {
           {kind === "trust"
             ? "Practical expectations for safer local work."
             : kind === "terms"
-              ? "Preview terms · effective November 4, 2026"
+              ? "Terms · effective November 4, 2026"
               : "Privacy notice · effective November 4, 2026"}
         </p>
       </PageHeading>
@@ -659,8 +664,7 @@ export function InfoPage({ kind }: { kind: "trust" | "terms" | "privacy" }) {
             payment features. An application expresses interest; it does not
             hire a worker or authorize work to start. The poster must hire the
             worker through the job page before the worker starts the agreed
-            work. When the site is in preview, hiring and paid work remain
-            unavailable.
+            work.
           </p>
           <h2>Early access</h2>
           <p>
@@ -686,6 +690,11 @@ export function InfoPage({ kind }: { kind: "trust" | "terms" | "privacy" }) {
             Fees are shown before posting or applying and retained for that
             agreement, including older jobs at their original rates. Payment and
             payout processing is provided by Stripe under its applicable terms.
+          </p>
+          <p>
+            Standard bank payouts are scheduled daily and typically reach the
+            worker’s bank about 7 days after the payout is requested. Instant
+            payouts are not available yet.
           </p>
           <p>
             Approval is not payment. Payment is not confirmation that a bank has
@@ -783,7 +792,7 @@ export function InfoPage({ kind }: { kind: "trust" | "terms" | "privacy" }) {
             If you submit an email already on the list, we do not disclose its
             information or replace its removal token. Use the original removal
             link. Signup information is retained until removal or until the
-            preview is closed and the list is no longer needed. Operational and
+            early-access list is no longer needed. Operational and
             backup copies may persist for their normal retention period.
           </p>
           <h2>Accounts, listings and applications</h2>

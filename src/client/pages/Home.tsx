@@ -255,8 +255,8 @@ export function Home() {
           )}
           <p className="payout-note">
             {config?.instantPayoutsEnabled
-              ? "Instant payouts depend on Stripe eligibility. Standard bank payouts follow settlement and banking timelines."
-              : "Instant Payouts: Coming later. Standard bank payouts follow settlement and banking timelines."}{" "}
+              ? "Instant payouts depend on Stripe eligibility. Standard bank payouts are scheduled daily and typically arrive about 7 days after the payout is requested."
+              : "Instant Payouts: Coming later. Standard bank payouts are scheduled daily and typically arrive about 7 days after the payout is requested."}{" "}
             <Link to="/how-it-works#payments">How payments work</Link>
           </p>
         </section>

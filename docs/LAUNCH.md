@@ -59,9 +59,9 @@ Use D1 Time Travel and take protected exports before migrations. Exports contain
 
 - Verify app-generated email delivery, successful first use of a magic link and rejection of token reuse on the canonical production hostname. Keep private links and message headers out of the repository.
 - Use separate poster and worker accounts to post a real pilot listing, apply, inspect the authorized application, withdraw, cancel and report. Label any acceptance fixtures and remove them afterward; do not present test demand as genuine demand.
-- Confirm hiring, starting work, messaging, milestone approval and all money routes remain unavailable in the production pilot. Verify the same restriction through API requests, not just disabled buttons.
+- Confirm hiring, starting work, messaging, milestone approval and all money routes are available in the production pilot. Verify through API requests, not just enabled buttons.
 - Verify administrator access through the secret allowlist, unauthorized denial, moderation and support routing. Confirm public job views omit private applicant and payment information.
-- Observe `listingsReady=true`, `authReady=true` and `paymentsReady=false` in deployed configuration. Keep `LAUNCH_MODE=preview`; record actual results and any remaining production checks in [VERIFICATION.md](VERIFICATION.md).
+- Observe `listingsReady=true`, `authReady=true` and `paymentsReady=true` in deployed configuration. `LAUNCH_MODE` is `live`; use `LAUNCH_MODE=preview` only to pause new work and money requests while retaining signed reconciliation for existing operations. Record actual results and any remaining production checks in [VERIFICATION.md](VERIFICATION.md).
 
 ## 6. Acceptance before paid launch
 
