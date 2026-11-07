@@ -48,10 +48,35 @@ describe("Workers Static Assets frontend", () => {
     expect(await missing.text()).toBe("");
   });
 
+  it("does not turn successful non-HTML files such as brand images into 404s", async () => {
+    const response = await frontend(
+      new Request("https://saladfinder.com/brand/logo.svg"),
+      {
+        ASSETS: {
+          fetch: vi.fn().mockResolvedValue(
+            new Response("<svg />", {
+              headers: { "Content-Type": "image/svg+xml" },
+            }),
+          ),
+        },
+      },
+    );
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toContain("image/svg+xml");
+  });
+
   it("serves the SPA recovery screen with an HTTP 404 on unknown routes", async () => {
     const response = await frontend(
       new Request("https://saladfinder.com/not-a-route"),
-      { ASSETS: { fetch: vi.fn().mockResolvedValue(new Response("SPA")) } },
+      {
+        ASSETS: {
+          fetch: vi.fn().mockResolvedValue(
+            new Response("SPA", {
+              headers: { "Content-Type": "text/html" },
+            }),
+          ),
+        },
+      },
     );
     expect(response.status).toBe(404);
     expect(await response.text()).toBe("SPA");

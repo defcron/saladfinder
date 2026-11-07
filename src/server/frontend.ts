@@ -29,14 +29,19 @@ export async function frontend(
   );
   headers.set("X-SaladFinder-Frontend", "workers-static-assets");
 
+  const isHtml = headers
+    .get("Content-Type")
+    ?.toLowerCase()
+    .includes("text/html");
   const spaFallbackForMissingAsset =
-    path.startsWith("/assets/") &&
+    path.startsWith("/assets/") && response.ok && isHtml;
+  const spaFallbackForUnknownRoute =
+    !path.startsWith("/assets/") &&
     response.ok &&
-    headers.get("Content-Type")?.toLowerCase().includes("text/html");
+    isHtml &&
+    !PAGE_ROUTE.test(path);
   const status =
-    response.ok &&
-    (spaFallbackForMissingAsset ||
-      (!path.startsWith("/assets/") && !PAGE_ROUTE.test(path)))
+    spaFallbackForMissingAsset || spaFallbackForUnknownRoute
       ? 404
       : response.status;
   return new Response(request.method === "HEAD" ? null : response.body, {
