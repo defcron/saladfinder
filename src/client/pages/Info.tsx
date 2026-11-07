@@ -802,8 +802,9 @@ export function InfoPage({ kind }: { kind: "trust" | "terms" | "privacy" }) {
             payout-account information on its own hosted pages. We store Stripe
             account and transaction references, amounts, payment and payout
             statuses, and reconciliation records to operate payments, handle
-            refunds and investigate disputes. The public frontend is hosted by
-            OpenAI Sites through our Cloudflare gateway. The configured
+            refunds and investigate disputes. The public frontend and
+            application API are hosted on Cloudflare Workers and Static Assets.
+            The configured
             transactional email provider handles sign-in links and essential
             account messages. Business-mail forwarding routes support requests
             to the operator’s inbox.

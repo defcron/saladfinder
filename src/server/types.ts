@@ -1,6 +1,6 @@
 import type { User } from "../shared/types";
 export type AppBindings = Env & {
-  FRONTEND_ORIGIN?: string;
+  ASSETS?: Fetcher;
   EMAIL?: SendEmail;
   EMAIL_PROVIDER?: string;
 };

@@ -60,9 +60,9 @@ Browser tests use an isolated temporary D1 store on port 8788. They do not modif
 
 ## Deploy
 
-The deployed Worker and D1 database retain the internal names `daywork` and `daywork-production` to preserve existing bindings and data. Session cookie names, Stripe metadata keys and the waitlist removal-link storage key also remain compatible with the original preview. These are technical identifiers; the public product is SaladFinder.
+The current production API Worker is still `daywork`; the independent static frontend Worker is `saladfinder-frontend`. The existing D1 database keeps its legacy name `daywork-production` to preserve data. Session cookie names, Stripe metadata keys and the waitlist removal-link storage key also remain compatible with the original preview. These are technical identifiers; the public product is SaladFinder.
 
-The checked-in `wrangler.jsonc` targets the owner's provisioned D1 database. For a fork, create your own D1 database and replace the database ID, APP_URL, widget key and worker name. Keep staging and production databases separate.
+The checked-in `wrangler.jsonc` targets the owner's provisioned D1 database and current API Worker. `wrangler.frontend.jsonc` targets the separate frontend Worker. For a fork, create your own D1 database and replace the database ID, APP_URL, widget key and worker names. Keep staging and production databases separate.
 
 ```bash
 npx wrangler login
@@ -90,7 +90,7 @@ These are fixed service rates, not a reimbursement of each payment's actual Stri
 
 ## Architecture and operations
 
-`src/client` contains the React interface, `src/server` the Hono API, and `src/shared` shared types/fee helpers. `migrations` contains D1 schema versions. Vite builds static assets; Wrangler deploys one Worker with D1 and static-asset bindings. Identity and payment details are collected by Stripe; the app stores only the required provider IDs and operational ledger.
+`src/client` contains the React interface, `src/server` the Hono API, and `src/shared` shared types/fee helpers. `migrations` contains D1 schema versions. Vite builds static assets; Wrangler deploys the API and frontend Workers independently. Identity and payment details are collected by Stripe; the app stores only the required provider IDs and operational ledger.
 
 Read [API](docs/API.md), [operations](docs/OPERATIONS.md), [launch](docs/LAUNCH.md), [security](SECURITY.md), and [verification](docs/VERIFICATION.md). Product terms and privacy pages start as prelaunch disclosures, not a claim of legal review. SaladFinder is the selected product name; business registration and trademark clearance are still outstanding.
 

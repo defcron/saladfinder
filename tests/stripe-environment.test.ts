@@ -57,6 +57,13 @@ describe("Stripe deployment mode boundary", () => {
       ).replace(/,\s*([}\]])/g, "$1"),
     );
     expect(config.main).toBe("src/server/index.ts");
+    expect(config.name).toBe("daywork");
+    expect(config.workers_dev).toBe(false);
+    expect(config.routes).toEqual([
+      { pattern: "saladfinder.com/api/*", zone_name: "saladfinder.com" },
+      { pattern: "www.saladfinder.com/*", zone_name: "saladfinder.com" },
+    ]);
+    expect(config.assets).toBeUndefined();
     expect(config.vars.STRIPE_MODE).toBe("live");
     expect(config.env.staging.vars.STRIPE_MODE).toBe("test");
     expect(config.env.local.vars.STRIPE_MODE).toBe("test");
@@ -66,5 +73,22 @@ describe("Stripe deployment mode boundary", () => {
     );
     expect(config.env.staging.vars.APP_URL).not.toBe(config.vars.APP_URL);
     expect(config.env.staging.routes).toEqual([]);
+    expect(config.env.staging.assets.binding).toBe("ASSETS");
+  });
+
+  it("deploys production frontend assets as a separate Worker", () => {
+    const config = JSON.parse(
+      readFileSync(
+        new URL("../wrangler.frontend.jsonc", import.meta.url),
+        "utf8",
+      ).replace(/,\s*([}\]])/g, "$1"),
+    );
+    expect(config.name).toBe("saladfinder-frontend");
+    expect(config.main).toBe("src/frontend/index.ts");
+    expect(config.routes).toEqual([
+      { pattern: "saladfinder.com/*", zone_name: "saladfinder.com" },
+    ]);
+    expect(config.assets.binding).toBe("ASSETS");
+    expect(config.assets.not_found_handling).toBe("single-page-application");
   });
 });

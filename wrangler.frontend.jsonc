@@ -1,0 +1,20 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "saladfinder-frontend",
+  "main": "src/frontend/index.ts",
+  "compatibility_date": "2026-11-03",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": false,
+  "preview_urls": false,
+  "routes": [
+    { "pattern": "saladfinder.com/*", "zone_name": "saladfinder.com" },
+  ],
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": true,
+  },
+  "observability": { "enabled": true, "head_sampling_rate": 0.1 },
+  "limits": { "cpu_ms": 50 },
+}

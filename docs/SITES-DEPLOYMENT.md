@@ -1,70 +1,44 @@
-# Sites frontend deployment
+# Cloudflare frontend hosting and releases
 
-SaladFinder's production frontend is hosted in ChatGPT Sites. The existing
-Cloudflare Worker is the canonical-domain gateway and API backend:
+Production runs two independently deployable Workers on the same Cloudflare zone:
 
-```text
-Browser -> https://saladfinder.com
-  /api/* -> daywork Worker -> D1 / email / Stripe
-  pages and assets -> daywork gateway -> public Sites static origin
-```
+- `saladfinder-frontend` serves the Vite React SPA and hashed assets from
+  Workers Static Assets on `saladfinder.com/*`.
+- `daywork` serves the API on the more-specific `saladfinder.com/api/*`
+  route and handles the `www` to root redirect.
 
-The Sites project is `appgprj_6aebb054ec9081918311eca3ede0063e` and its origin is
-https://saladfinder.defcron.chatgpt.site. It is public. Its frontend redirects
-direct browser visits to https://saladfinder.com, where same-origin API calls,
-session cookies, Turnstile, sign-in links, and payment callbacks continue working.
-The domain does not need a DNS change or a Sites custom-domain binding for this
-architecture. The existing www redirect and unrelated DNS records are preserved.
+Cloudflare routes the most specific matching route to its Worker. This keeps
+browser API calls same-origin, including auth cookies and CSRF checks. If the
+frontend Worker has a deployment or runtime issue, the API route remains mapped
+to the API Worker; if the API Worker has an issue, the static frontend remains
+available and can show its API error state. Both services still share the same
+Cloudflare zone, DNS, account and control plane.
 
-## Repository layout
+Staging intentionally serves both parts from `saladfinder-staging` to retain a
+single same-origin staging URL. The production frontend and API builds use the
+same source revision but have independent deployment targets and workflow path
+filters.
 
-- `main`: application source, backend, tests, and deployment instructions.
-- `frontend-deploy`: independently rooted frontend artifact branch in the same
-  `defcron/saladfinder` GitHub repository. Contains `dist`, MIT `LICENSE`, and
-  `.openai/hosting.json`; no backend source or credentials.
-- Sites also requires its own managed source repository. Publish the same
-  artifact commit to that repository using the Sites source workflow. A GitHub
-  push alone does not publish a Sites version.
+## GitHub release pipeline
 
-## Publish an update
+`.github/workflows/ci.yml` runs generated binding checks, TypeScript checks,
+coverage tests, frontend and gateway builds, deployment parity checks, and
+Playwright end-to-end tests on pull requests and pushes to `main`. A successful
+push to `main` deploys the API Worker when backend files change, the frontend
+Worker when frontend files change, and the Pages redirect gateway when its code
+changes. Remote D1 migrations run only when migration files change. Deployment
+requires `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` in the GitHub
+`production` environment. Pull requests do not receive deployment credentials.
 
-1. Build with `npm run build`, then run `node scripts/prepare-sites.mjs`.
-   The prepared checkout is `.local/sites-frontend`. Existing hashed assets are
-   retained for already-open browser tabs; periodically prune obsolete versions
-   after an appropriate retention period.
-2. Use the Sites skill with the existing project ID. Obtain a fresh source write
-   credential when necessary. Pass it only through the source helper's hidden
-   stdin; never save tokens in files or Git configuration.
-3. In the prepared checkout, run the Sites `site-workflow.mjs` helper to commit,
-   push to its managed source repository, and package the static directory.
-   Use the helper's returned source SHA and archive to save and deploy the public
-   Site version. Wait for successful publication before updating the gateway.
-4. Mirror that exact artifact commit to GitHub:
-   `git -C .local/sites-frontend push https://github.com/defcron/saladfinder.git HEAD:refs/heads/frontend-deploy`
-5. For backend changes, regenerate types with `npm run cf:types` and deploy the
-   top-level production configuration with `npx wrangler deploy --env ''`.
-6. Run `npm run check`, `npm run coverage`, and `npm run test:e2e`, plus live
-   desktop/mobile checks of the canonical domain, API health, deep links,
-   missing assets, and generated-origin redirect. Normally validate before
-   deployment; the initial migration was explicitly requested deploy-first.
+## SPA routes and assets
 
-## Routing and security
+`wrangler.frontend.jsonc` builds from `dist/`; its Static Assets binding uses the
+SPA fallback for browser routes such as `/sign-in`, `/jobs/:id`, and
+`/dashboard`. The frontend Worker adds cache and browser security headers. The
+API Worker's `wrangler.jsonc` does not bind production static assets. Local and
+staging environments retain their asset binding for same-origin development and
+acceptance flows.
 
-The gateway maps SPA page requests to the Sites root (`/`, not `/index.html`,
-which Sites redirects). React Router handles unknown page paths. Static assets
-retain their paths and missing assets retain HTTP 404. A `404.html` SPA shell is
-also included for direct deep links to the Sites origin.
-
-The gateway constructs fresh upstream requests: cookies, authorization headers,
-referers, query strings, and sign-in tokens are not forwarded to Sites. It does
-not follow upstream redirects and does not forward Sites cookies. Existing CSP
-and framing protections are applied at the gateway. Hashed bundles are immutable;
-HTML and other assets revalidate. `X-SaladFinder-Frontend: sites` identifies
-responses served through the Sites origin.
-
-The legacy ASSETS binding remains for local/staging operation and rollback. To
-disable the Sites origin, remove `FRONTEND_ORIGIN` from production configuration
-and redeploy with the desired local frontend build. This does not roll back D1
-data. Hosting publication does not itself enable paid hiring or certify Stripe
-readiness. Paid-pilot configuration and evidence are recorded in [LAUNCH.md](LAUNCH.md)
-and [VERIFICATION.md](VERIFICATION.md).
+Historical Sites migration records remain in `docs/VERIFICATION.md` as a record
+of past releases. ChatGPT Sites is no longer intended to serve production
+requests after the verified Cloudflare cutover.

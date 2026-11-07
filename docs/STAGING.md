@@ -19,7 +19,7 @@ flowchart LR
 
 | Setting | Staging | Production |
 | --- | --- | --- |
-| Worker | `saladfinder-staging` | `daywork` |
+| Worker | `saladfinder-staging` | `saladfinder` |
 | Entry point | `src/server/index.ts` | `src/server/index.ts` |
 | `STRIPE_MODE` | `test` | `live` |
 | Stripe credential | Restricted key from managed `SaladFinder staging` sandbox | Restricted live key for the account inside `saladfinder` |
@@ -49,10 +49,12 @@ a particular behavior, use the same gate values and equivalent provider account
 capabilities. A disabled production instant option and an eligible sandbox instant
 option are different configuration inputs, not different implementations.
 
-Production serves the React build through Sites; staging serves that same build
-through its isolated Worker asset binding. Hosting, domains, credentials, account
-IDs and database contents differ. This payment design does not claim that staging
-duplicates Sites infrastructure or production account restrictions.
+Production separates the API Worker (`saladfinder`) from the frontend Worker
+(`saladfinder-frontend`). Staging serves both through its isolated Worker and
+Workers Static Assets binding so the staging hostname remains same-origin.
+Hosting configuration, domains, credentials, account IDs and database contents
+differ; the deployment environments remain isolated. This payment design does
+not imply identical account permissions or capabilities.
 
 ## Test and release discipline
 
@@ -70,7 +72,7 @@ duplicates Sites infrastructure or production account restrictions.
    evidence of payment.
 4. Promote the same source revision and frontend build to production. Do not
    rewrite payment logic or substitute a provider implementation when promoting.
-   Follow [Sites deployment](SITES-DEPLOYMENT.md) for the shared frontend artifact.
+   GitHub Actions builds and deploys the frontend with the same Worker release.
 5. Keep production in preview until [LAUNCH.md](LAUNCH.md) is satisfied. Sandbox
    acceptance cannot establish bank arrival, live eligibility, limits or fees.
 

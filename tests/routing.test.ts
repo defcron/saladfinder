@@ -99,10 +99,13 @@ describe("canonical public routing", () => {
       expect(response.status).toBe(200);
       expect(response.headers.has("location")).toBe(false);
       expect(response.headers.get("content-security-policy")).toBe(
-        "default-src 'self'",
+        "default-src 'self'; script-src 'self' https://challenges.cloudflare.com; style-src 'self'; img-src 'self' data:; connect-src 'self' https://challenges.cloudflare.com; frame-src https://challenges.cloudflare.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'",
       );
       expect(response.headers.get("cache-control")).toBe(
-        "public, max-age=3600",
+        "no-cache, no-transform",
+      );
+      expect(response.headers.get("x-saladfinder-frontend")).toBe(
+        "workers-static-assets",
       );
       expect(await response.text()).toBe(
         method === "HEAD" ? "" : "asset content",

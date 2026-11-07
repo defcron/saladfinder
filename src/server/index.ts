@@ -128,14 +128,16 @@ export default {
     const { pathname } = new URL(request.url);
     if (pathname === "/api" || pathname.startsWith("/api/"))
       return app.fetch(request, env, ctx);
-    // Production serves the Sites frontend through the canonical same-origin gateway.
-    // Local/staging continue to use their isolated ASSETS binding.
     if (!["GET", "HEAD"].includes(request.method))
       return new Response("Method not allowed.", {
         status: 405,
         headers: { Allow: "GET, HEAD", "Cache-Control": "no-store" },
       });
-    return frontend(request, env);
+    if (env.ASSETS) return frontend(request, { ASSETS: env.ASSETS });
+    return new Response("Not found.", {
+      status: 404,
+      headers: { "Cache-Control": "no-store" },
+    });
   },
   async scheduled(_controller: ScheduledController, env: Env): Promise<void> {
     // Expiring credentials and throttle records never need long-term retention.

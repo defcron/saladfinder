@@ -4,18 +4,12 @@
   "main": "src/server/index.ts",
   "compatibility_date": "2026-11-03",
   "compatibility_flags": ["nodejs_compat"],
-  "workers_dev": true,
+  "workers_dev": false,
   "routes": [
-    { "pattern": "saladfinder.com/*", "zone_name": "saladfinder.com" },
+    { "pattern": "saladfinder.com/api/*", "zone_name": "saladfinder.com" },
     { "pattern": "www.saladfinder.com/*", "zone_name": "saladfinder.com" },
   ],
   "preview_urls": false,
-  "assets": {
-    "directory": "./dist",
-    "binding": "ASSETS",
-    "not_found_handling": "single-page-application",
-    "run_worker_first": true,
-  },
   "observability": {
     "enabled": true,
     "head_sampling_rate": 0.1,
@@ -39,7 +33,6 @@
     "SUBSCRIPTIONS_ENABLED": "true",
     "STRIPE_ECONOMY_PRICE": "price_1UYVcfAUuoHexO68guUHb0Hv",
     "STRIPE_PREMIUM_PRICE": "price_1UYVdOAUuoHexO68kKxNSQhq",
-    "FRONTEND_ORIGIN": "https://saladfinder.defcron.chatgpt.site",
     "APP_URL": "https://saladfinder.com",
     "LAUNCH_MODE": "live",
     "INSTANT_PAYOUTS_ENABLED": "false",
@@ -66,8 +59,15 @@
   ],
   "env": {
     "local": {
-      "name": "daywork-local",
+      "name": "saladfinder-local",
+      "workers_dev": true,
       "routes": [],
+      "assets": {
+        "directory": "./dist",
+        "binding": "ASSETS",
+        "not_found_handling": "single-page-application",
+        "run_worker_first": true,
+      },
       "vars": {
         "APP_ENV": "local",
         "CROSS_BORDER_PAYOUTS_ENABLED": "false",
@@ -93,7 +93,14 @@
     },
     "staging": {
       "name": "saladfinder-staging",
+      "workers_dev": true,
       "routes": [],
+      "assets": {
+        "directory": "./dist",
+        "binding": "ASSETS",
+        "not_found_handling": "single-page-application",
+        "run_worker_first": true,
+      },
       "vars": {
         "APP_ENV": "staging",
         "CROSS_BORDER_PAYOUTS_ENABLED": "true",
