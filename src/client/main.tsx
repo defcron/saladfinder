@@ -1,7 +1,7 @@
 import { subscribeLocale, localeVersion } from "./locale";
 import { useSyncExternalStore, StrictMode } from "react";
 import { createRoot } from "react-dom/client";
-import { BrowserRouter, Routes, Route, Link } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Link, Navigate } from "react-router-dom";
 import { AppProvider, useApp } from "./context";
 import { Layout, Loading, Alert, RequireUser, PageHeading } from "./components";
 import { Home } from "./pages/Home";
@@ -30,6 +30,7 @@ function App() {
           <Route path="/sign-in" element={<SignIn />} />
           <Route path="/auth/verify" element={<Verify />} />
           <Route path="/post" element={<PostJob />} />
+          <Route path="/post-a-job" element={<Navigate to="/post" replace />} />
           <Route path="/jobs/:id" element={<JobPage />} />
           <Route
             path="/dashboard"
@@ -59,6 +60,7 @@ function App() {
           <Route path="/pricing" element={<Pricing />} />
           <Route path="/how-it-works" element={<HowItWorks />} />
           <Route path="/trust" element={<InfoPage kind="trust" />} />
+          <Route path="/trust-safety" element={<Navigate to="/trust" replace />} />
           <Route path="/terms" element={<InfoPage kind="terms" />} />
           <Route path="/privacy" element={<InfoPage kind="privacy" />} />
           <Route
